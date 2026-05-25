@@ -8,6 +8,11 @@ import ctypes
 import string
 from flask import Flask, render_template, request, jsonify, send_from_directory
 from werkzeug.utils import secure_filename
+from dotenv import load_dotenv
+
+# Load environment variables
+load_dotenv()
+
 
 try:
     from faster_whisper import WhisperModel
@@ -362,6 +367,257 @@ def get_transcript(filename):
             }), 500
             
     return jsonify({'exists': False}), 200
+
+def split_transcript_into_sentences(transcript_data):
+    segments = transcript_data.get('segments', [])
+    all_words = []
+    for seg in segments:
+        for w in seg.get('words', []):
+            all_words.append(w)
+            
+    if not all_words:
+        # Fallback to segment-level text if no word-level timestamps exist
+        sentences = []
+        sentence_id = 0
+        for seg in segments:
+            text = seg.get('text', '').strip()
+            import re
+            parts = re.split(r'(?<=[.!?])\s+', text)
+            for part in parts:
+                if part.strip():
+                    sentences.append({
+                        'id': sentence_id,
+                        'text': part.strip(),
+                        'start': seg.get('start', 0.0),
+                        'end': seg.get('end', 0.0)
+                    })
+                    sentence_id += 1
+        return sentences
+
+    sentences = []
+    current_words = []
+    sentence_id = 0
+    
+    # Common abbreviations that don't end a sentence
+    ABBREVIATIONS = {
+        'mr.', 'mrs.', 'ms.', 'dr.', 'prof.', 'sr.', 'jr.', 'vs.', 'etc.', 
+        'eg.', 'ie.', 'a.m.', 'p.m.', 'u.s.', 'u.k.', 'jan.', 'feb.', 
+        'mar.', 'apr.', 'jun.', 'jul.', 'aug.', 'sep.', 'oct.', 'nov.', 'dec.'
+    }
+    
+    for w in all_words:
+        current_words.append(w)
+        word_text = w.get('word', '').strip()
+        
+        # Determine if this word ends a sentence
+        is_sentence_end = False
+        
+        # Check for sentence-ending punctuation
+        if word_text and word_text[-1] in ['.', '?', '!']:
+            # Check if it's an abbreviation
+            clean_word = word_text.lower()
+            if clean_word not in ABBREVIATIONS:
+                is_sentence_end = True
+            
+        if is_sentence_end:
+            text_parts = []
+            for cw in current_words:
+                text_parts.append(cw.get('word', ''))
+            sentence_text = "".join(text_parts).strip()
+            
+            sentences.append({
+                'id': sentence_id,
+                'text': sentence_text,
+                'start': current_words[0].get('start', 0.0),
+                'end': current_words[-1].get('end', 0.0)
+            })
+            sentence_id += 1
+            current_words = []
+            
+    # Capture any trailing words
+    if current_words:
+        text_parts = []
+        for cw in current_words:
+            text_parts.append(cw.get('word', ''))
+        sentence_text = "".join(text_parts).strip()
+        sentences.append({
+            'id': sentence_id,
+            'text': sentence_text,
+            'start': current_words[0].get('start', 0.0),
+            'end': current_words[-1].get('end', 0.0)
+        })
+        
+    return sentences
+
+@app.route('/chunking')
+def chunking_view():
+    return render_template('chunking.html')
+
+@app.route('/api/sentences/<path:filename>', methods=['GET'])
+def get_sentences(filename):
+    transcript_filename = f"{filename}.json"
+    transcript_path = os.path.join(app.config['UPLOAD_FOLDER'], transcript_filename)
+    
+    if not os.path.exists(transcript_path) or not os.path.isfile(transcript_path):
+        return jsonify({'error': f"Transcript file not found for: {filename}"}), 404
+        
+    try:
+        with open(transcript_path, 'r', encoding='utf-8') as f:
+            transcript_data = json.load(f)
+            
+        sentences = split_transcript_into_sentences(transcript_data)
+        return jsonify({
+            'filename': filename,
+            'duration': transcript_data.get('duration', 0.0),
+            'sentences': sentences
+        }), 200
+    except Exception as e:
+        return jsonify({'error': f"Failed to parse sentences: {str(e)}"}), 500
+
+@app.route('/api/chunk-sessions', methods=['POST'])
+def chunk_sessions():
+    data = request.json or {}
+    sentences = data.get('sentences', [])
+    model_name = data.get('model', 'gemini-2.5-flash')
+    
+    # API key from headers, request body, or environment
+    api_key = request.headers.get('X-Gemini-Key') or data.get('api_key') or os.getenv('GEMINI_API_KEY')
+    
+    if not api_key:
+        return jsonify({'error': 'Gemini API Key is missing. Please configure GEMINI_API_KEY in your .env file.'}), 400
+        
+    if not sentences:
+        return jsonify({'error': 'No sentences provided for chunking.'}), 400
+        
+    # Construct the sentences payload for prompt
+    sentences_str = ""
+    for s in sentences:
+        sentences_str += f"[{s['id']}] {s['text']}\n"
+        
+    # Design prompt
+    prompt = f"""You are an AI assistant that partitions a sequence of transcription sentences into logical, coherent topical sessions (chapters).
+Each session must contain approximately 4 to 5 sentences.
+You must respect the original chronological order of the sentences. Do not reorder them, skip any, or duplicate them. Every sentence index from 0 to {len(sentences)-1} must belong to exactly one session, and the indices within and across sessions must be strictly sequential (e.g. Session 1: [0, 1, 2, 3], Session 2: [4, 5, 6, 7, 8], etc.).
+
+For each session, construct:
+1. A concise, professional title.
+2. A single-sentence summary of the content.
+3. The list of sentence indices belonging to that session.
+
+Here are the sentences to partition:
+{sentences_str}
+"""
+    
+    import urllib.request
+    import urllib.error
+    
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/{model_name}:generateContent?key={api_key}"
+    
+    headers = {
+        'Content-Type': 'application/json'
+    }
+    
+    body = {
+        "contents": [
+            {
+                "parts": [
+                    {"text": prompt}
+                ]
+            }
+        ],
+        "generationConfig": {
+            "responseMimeType": "application/json",
+            "responseSchema": {
+                "type": "ARRAY",
+                "items": {
+                    "type": "OBJECT",
+                    "properties": {
+                        "title": {"type": "STRING"},
+                        "summary": {"type": "STRING"},
+                        "sentence_indices": {
+                            "type": "ARRAY",
+                            "items": {"type": "INTEGER"}
+                        }
+                    },
+                    "required": ["title", "summary", "sentence_indices"]
+                }
+            }
+        }
+    }
+    
+    try:
+        req = urllib.request.Request(url, data=json.dumps(body).encode('utf-8'), headers=headers, method='POST')
+        with urllib.request.urlopen(req, timeout=60) as response:
+            response_data = json.loads(response.read().decode('utf-8'))
+            
+        candidates = response_data.get('candidates', [])
+        if not candidates:
+            return jsonify({'error': 'No response candidates received from Gemini API.', 'details': response_data}), 500
+            
+        text_response = candidates[0].get('content', {}).get('parts', [{}])[0].get('text', '')
+        if not text_response:
+            return jsonify({'error': 'Empty response from Gemini API.', 'details': response_data}), 500
+            
+        sessions = json.loads(text_response.strip())
+        return jsonify({'sessions': sessions}), 200
+        
+    except urllib.error.HTTPError as e:
+        error_body = e.read().decode('utf-8')
+        try:
+            error_json = json.loads(error_body)
+            error_msg = error_json.get('error', {}).get('message', str(e))
+        except Exception:
+            error_msg = error_body or str(e)
+        return jsonify({'error': f"Gemini API HTTP Error: {error_msg}"}), e.code
+    except Exception as e:
+        return jsonify({'error': f"Failed to run Gemini chunking: {str(e)}"}), 500
+
+@app.route('/api/chunks/<path:filename>', methods=['GET'])
+def get_chunks(filename):
+    chunks_filename = f"{filename}_chunks.json"
+    chunks_path = os.path.join(app.config['UPLOAD_FOLDER'], chunks_filename)
+    
+    if os.path.exists(chunks_path) and os.path.isfile(chunks_path):
+        try:
+            with open(chunks_path, 'r', encoding='utf-8') as f:
+                data = json.load(f)
+            return jsonify({
+                'exists': True,
+                'sessions': data.get('sessions', []),
+                'updated_at': data.get('updated_at', '')
+            }), 200
+        except Exception as e:
+            return jsonify({
+                'exists': False,
+                'error': f"Failed to load chunks: {str(e)}"
+            }), 500
+            
+    return jsonify({'exists': False}), 200
+
+@app.route('/api/save-chunks/<path:filename>', methods=['POST'])
+def save_chunks(filename):
+    data = request.json or {}
+    sessions = data.get('sessions', [])
+    
+    chunks_filename = f"{filename}_chunks.json"
+    chunks_path = os.path.join(app.config['UPLOAD_FOLDER'], chunks_filename)
+    
+    try:
+        import datetime
+        save_data = {
+            'filename': filename,
+            'sessions': sessions,
+            'updated_at': datetime.datetime.now().isoformat()
+        }
+        with open(chunks_path, 'w', encoding='utf-8') as f:
+            json.dump(save_data, f, ensure_ascii=False, indent=2)
+            
+        return jsonify({
+            'message': 'Chunks saved successfully',
+            'filename': chunks_filename
+        }), 200
+    except Exception as e:
+        return jsonify({'error': f"Failed to save chunks: {str(e)}"}), 500
 
 if __name__ == '__main__':
     app.run(debug=True, port=5000)

@@ -428,6 +428,9 @@ async function loadAudioLibrary() {
                             <button class="btn-toggle-transcript" data-filename="${escapeHtml(file.name)}">
                                 <i class="fa-solid fa-file-lines"></i> Show Transcript
                             </button>
+                            <a href="/chunking?file=${encodeURIComponent(file.name)}" class="btn-sm-action-link" style="text-decoration: none; display: inline-flex; align-items: center; gap: 6px; padding: 10px 14px; border-radius: 10px; border: 1px solid var(--border-color); background: rgba(99, 102, 241, 0.1); color: var(--color-text-primary); font-size: 0.8rem; font-weight: 600; cursor: pointer; transition: var(--transition-smooth);" onmouseover="this.style.borderColor='var(--accent-primary)'; this.style.boxShadow='0 0 10px rgba(99, 102, 241, 0.2)';" onmouseout="this.style.borderColor='var(--border-color)'; this.style.boxShadow='none';">
+                                <i class="fa-solid fa-scissors"></i> Smart Chunker
+                            </a>
                             <div class="transcript-search-box hidden" id="search-box-${safeId}">
                                  <i class="fa-solid fa-magnifying-glass"></i>
                                  <input type="text" class="transcript-search-input" data-filename="${escapeHtml(file.name)}" placeholder="Search words...">

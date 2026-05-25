@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AuraExtract — Smart Chunker</title>
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=Plus+Jakarta+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <!-- FontAwesome for icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Custom styling -->
+    <link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body>
+    <div class="bg-glow bg-glow-1"></div>
+    <div class="bg-glow bg-glow-2"></div>
+
+    <div class="container">
+        <!-- Header -->
+        <header class="app-header">
+            <div class="logo">
+                <i class="fa-solid fa-bolt-lightning logo-icon"></i>
+                <h1>Aura<span>Extract</span></h1>
+            </div>
+            <p class="subtitle">Smart Speech segmentation tool powered by Gemini AI</p>
+            <nav class="app-nav">
+                <a href="/" class="nav-item"><i class="fa-solid fa-chart-simple"></i> Dashboard</a>
+                <a href="/chunking" class="nav-item active"><i class="fa-solid fa-scissors"></i> Smart Chunker</a>
+            </nav>
+        </header>
+
+        <!-- Configuration Bar -->
+        <div class="card config-bar-card" style="margin-bottom: 30px;">
+            <div class="config-grid">
+                <div class="config-group">
+                    <label class="option-title">Select Transcript File</label>
+                    <div class="select-wrapper">
+                        <select id="chunker-file-select" class="premium-select">
+                            <option value="">-- Choose Transcribed File --</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="config-group">
+                    <label class="option-title">Gemini API Key (Optional Override)</label>
+                    <div class="api-key-input-wrapper">
+                        <input type="password" id="gemini-api-key-input" placeholder="Server .env key will be used if empty" class="path-input">
+                        <button class="btn-toggle-visibility" id="toggle-key-visibility" title="Show/Hide Key">
+                            <i class="fa-solid fa-eye-slash"></i>
+                        </button>
+                    </div>
+                </div>
+                <div class="config-group">
+                    <label class="option-title">Gemini Model</label>
+                    <div class="select-wrapper">
+                        <select id="gemini-model-select" class="premium-select">
+                            <option value="gemini-2.5-flash" selected>Gemini 2.5 Flash (Recommended)</option>
+                            <option value="gemini-2.5-pro">Gemini 2.5 Pro</option>
+                            <option value="gemini-2.0-flash">Gemini 2.0 Flash</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="config-actions">
+                    <button class="btn btn-primary btn-block" id="btn-run-chunker" disabled>
+                        <i class="fa-solid fa-wand-magic-sparkles"></i> Auto-Chunk
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Chunker Main Workspace (Hidden until file selected) -->
+        <div id="chunker-workspace" class="workspace-grid hidden">
+            <!-- Left Side: Source Audio & Subchunks -->
+            <div class="card source-card">
+                <div class="card-header">
+                    <h2><i class="fa-solid fa-file-audio card-icon"></i>Audio & Subchunks</h2>
+                    <span class="badge badge-info" id="sentence-count-badge">0 Sentences</span>
+                </div>
+                
+                <div class="audio-player-container">
+                    <audio id="workspace-audio-player" controls style="width: 100%;">
+                        Your browser does not support the audio element.
+                    </audio>
+                </div>
+
+                <div class="sentences-list-container" id="sentences-list-wrapper">
+                    <!-- Dynamic sentence subchunks render here -->
+                </div>
+            </div>
+
+            <!-- Right Side: Topical Sessions -->
+            <div class="card sessions-card">
+                <div class="card-header">
+                    <h2><i class="fa-solid fa-folder-open card-icon"></i>Grouped Sessions</h2>
+                    <div class="session-action-header-buttons">
+                        <button class="btn btn-secondary btn-sm" id="btn-add-session" style="padding: 6px 12px; font-size: 0.8rem;">
+                            <i class="fa-solid fa-plus"></i> Add Session
+                        </button>
+                        <button class="btn btn-primary btn-sm" id="btn-save-sessions" style="padding: 6px 12px; font-size: 0.8rem;" disabled>
+                            <i class="fa-solid fa-save"></i> Save Changes
+                        </button>
+                        <button class="btn btn-secondary btn-sm" id="btn-export-json" style="padding: 6px 12px; font-size: 0.8rem;" title="Export JSON File">
+                            <i class="fa-solid fa-file-export"></i> Export
+                        </button>
+                    </div>
+                </div>
+
+                <div class="sessions-list-container" id="sessions-list-wrapper">
+                    <div class="workspace-empty" id="sessions-empty-state">
+                        <i class="fa-solid fa-cubes empty-icon"></i>
+                        <p class="primary-text">No sessions created yet</p>
+                        <p class="secondary-text">Click "Auto-Chunk" to group sentences using Gemini, or select "Add Session" to group them manually.</p>
+                    </div>
+                    <div class="sessions-list hidden" id="sessions-list">
+                        <!-- Dynamic sessions list renders here -->
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- No File Selected Screen -->
+        <div id="no-file-screen" class="card" style="text-align: center; padding: 80px 20px;">
+            <i class="fa-solid fa-scissors" style="font-size: 4rem; color: var(--color-text-muted); margin-bottom: 24px;"></i>
+            <h2 style="font-family: var(--font-heading); margin-bottom: 10px;">Select a file to begin chunking</h2>
+            <p style="color: var(--color-text-secondary); max-width: 500px; margin: 0 auto 30px auto;">
+                To group transcripts into topical chapters, choose an audio file from your library that has already been transcribed.
+            </p>
+            <div style="max-width: 300px; margin: 0 auto;">
+                <a href="/" class="btn btn-primary btn-block"><i class="fa-solid fa-house"></i> Go to Dashboard</a>
+            </div>
+        </div>
+    </div>
+
+    <!-- Application Script -->
+    <script src="/static/js/chunking.js"></script>
+</body>
+</html>

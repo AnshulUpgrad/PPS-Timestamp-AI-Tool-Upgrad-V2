@@ -20,3 +20,5 @@ uploads/
 .idea/
 Thumbs.db
 Desktop.ini
+.env
+
