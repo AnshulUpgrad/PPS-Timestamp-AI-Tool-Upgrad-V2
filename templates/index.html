@@ -1,0 +1,241 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AuraExtract — Local Video to Audio Extractor</title>
+    <!-- Google Fonts for premium typography -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=Plus+Jakarta+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <!-- FontAwesome for icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Custom styling -->
+    <link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body>
+    <div class="bg-glow bg-glow-1"></div>
+    <div class="bg-glow bg-glow-2"></div>
+
+    <div class="container">
+        <!-- Header -->
+        <header class="app-header">
+            <div class="logo">
+                <i class="fa-solid fa-bolt-lightning logo-icon"></i>
+                <h1>Aura<span>Extract</span></h1>
+            </div>
+            <p class="subtitle">Instant local audio extractor and transcriber. Private, fast, and secure on your device.</p>
+        </header>
+
+        <!-- Main Dashboard Layout -->
+        <div class="dashboard-grid">
+            <!-- Left Side: Selection and Extraction -->
+            <div class="card main-card">
+                <div class="card-header">
+                    <h2><i class="fa-solid fa-wand-magic-sparkles card-icon"></i>Audio Extractor</h2>
+                    <span class="badge badge-success hidden" id="ffmpeg-status-badge">Active</span>
+                </div>
+
+                <!-- Select File Hero Area -->
+                <div class="select-hero-container" id="select-hero-container">
+                    <button class="btn-select-file" id="native-browse-file-btn">
+                        <div class="icon-circle">
+                            <i class="fa-solid fa-file-video select-icon"></i>
+                        </div>
+                        <p class="primary-text">Select Video File</p>
+                        <p class="secondary-text">Select a video from your computer</p>
+                        <span class="file-limits">Supports MP4, WebM, MOV, AVI, MKV</span>
+                    </button>
+                </div>
+
+                <!-- Selected File Metadata & Actions (Hidden initially) -->
+                <div class="file-details hidden" id="file-details">
+                    <div class="file-meta-item">
+                        <div class="meta-icon"><i class="fa-solid fa-video"></i></div>
+                        <div class="meta-content">
+                            <p class="meta-label">Selected Local File</p>
+                            <p class="meta-value" id="file-name" title="Video file path">video_name.mp4</p>
+                        </div>
+                    </div>
+                    <div class="file-meta-item">
+                        <div class="meta-icon"><i class="fa-solid fa-weight-hanging"></i></div>
+                        <div class="meta-content">
+                            <p class="meta-label">File Size</p>
+                            <p class="meta-value text-accent" id="file-size">0.0 MB</p>
+                        </div>
+                    </div>
+
+                    <!-- Processing Mode Option -->
+                    <div class="processing-options">
+                        <label class="option-title">Audio Format Option</label>
+                        <div class="radio-group">
+                            <label class="radio-label">
+                                <input type="radio" name="extraction-mode" value="copy" checked>
+                                <div class="radio-custom">
+                                    <div class="radio-dot"></div>
+                                </div>
+                                <div class="radio-text">
+                                    <span class="radio-main">Original Quality (Recommended)</span>
+                                    <span class="radio-desc">Super fast, matches original video audio quality</span>
+                                </div>
+                            </label>
+                            <label class="radio-label">
+                                <input type="radio" name="extraction-mode" value="mp3">
+                                <div class="radio-custom">
+                                    <div class="radio-dot"></div>
+                                </div>
+                                <div class="radio-text">
+                                    <span class="radio-main">Standard MP3 Format</span>
+                                    <span class="radio-desc">Highly compatible format, converts to MP3</span>
+                                </div>
+                            </label>
+                        </div>
+                    </div>
+
+                    <!-- Transcription Options -->
+                    <div class="processing-options" style="margin-top: 15px; border-top: 1px solid rgba(255,255,255,0.06); padding-top: 15px;">
+                        <label class="option-title" for="pipeline-model-select">Transcription Accuracy</label>
+                        <p class="section-desc" style="font-size: 0.8rem; color: var(--color-text-muted); margin-bottom: 8px;">
+                            Select the level of accuracy. Higher accuracy takes slightly longer to process.
+                        </p>
+                        <div class="select-wrapper">
+                            <select id="pipeline-model-select" class="premium-select">
+                                <option value="tiny">Fast (Less accurate)</option>
+                                <option value="base" selected>Balanced (Recommended)</option>
+                                <option value="small">High (Most accurate, slower)</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="action-buttons-row">
+                        <button class="btn btn-secondary" id="change-file-btn">
+                            <i class="fa-solid fa-folder-open"></i> Change File
+                        </button>
+                        <button class="btn btn-primary" id="process-btn" style="flex: 1;">
+                            <i class="fa-solid fa-bolt"></i> Extract Audio
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Processing Pipeline (Visible during operation) -->
+                <div class="processing-dashboard hidden" id="processing-dashboard">
+                    <h3><i class="fa-solid fa-spinner fa-spin"></i> Processing Your Video</h3>
+
+                    <div class="pipeline-steps">
+                        <!-- Step 1: Locating FFmpeg -->
+                        <div class="pipeline-step pending" id="step-wasm">
+                            <div class="step-status-icon"><i class="fa-solid fa-circle-dot"></i></div>
+                            <div class="step-details">
+                                <p class="step-title">Preparing files</p>
+                                <p class="step-desc" id="step-wasm-desc">Setting up workspace...</p>
+                            </div>
+                        </div>
+
+                        <!-- Step 2: Extraction -->
+                        <div class="pipeline-step pending" id="step-extract">
+                            <div class="step-status-icon"><i class="fa-solid fa-circle-dot"></i></div>
+                            <div class="step-details">
+                                <p class="step-title">Extracting audio track</p>
+                                <p class="step-desc" id="step-extract-desc">Converting video to sound file...</p>
+                            </div>
+                        </div>
+
+                        <!-- Step 3: Local Word-Level Transcription -->
+                        <div class="pipeline-step pending" id="step-transcribe">
+                            <div class="step-status-icon"><i class="fa-solid fa-circle-dot"></i></div>
+                            <div class="step-details">
+                                <p class="step-title">Converting speech to text</p>
+                                <p class="step-desc" id="step-transcribe-desc">Generating word-level transcript...</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Size reduction dashboard stats -->
+                    <div class="reduction-dashboard hidden" id="reduction-dashboard">
+                        <div class="stat-box">
+                            <span class="stat-num text-danger" id="stat-original-size">0.0 MB</span>
+                            <span class="stat-label">Original Video</span>
+                        </div>
+                        <div class="stat-divider"><i class="fa-solid fa-arrow-right"></i></div>
+                        <div class="stat-box">
+                            <span class="stat-num text-success" id="stat-audio-size">0.0 MB</span>
+                            <span class="stat-label">Extracted Audio</span>
+                        </div>
+                        <div class="stat-percentage">
+                            <span class="percent-badge" id="stat-saving-badge">-0.0% Storage Saved</span>
+                        </div>
+                    </div>
+
+                    <!-- Logs overlay (hidden for non-tech users) -->
+                    <div class="log-panel hidden">
+                        <div class="log-header" id="log-toggle">
+                            <span><i class="fa-solid fa-terminal"></i> Activity Log</span>
+                            <i class="fa-solid fa-chevron-down toggle-icon" id="log-chevron"></i>
+                        </div>
+                        <div class="log-body hidden" id="log-console">
+                            <div class="log-line">Ready for operations.</div>
+                        </div>
+                    </div>
+
+                    <button class="btn btn-secondary btn-block hidden" id="reset-btn">
+                        <i class="fa-solid fa-arrow-left"></i> Extract Another Video
+                    </button>
+                </div>
+
+                <!-- Footer settings launcher (hidden for non-tech users) -->
+                <div class="card-footer-settings hidden">
+                    <button class="btn-settings" id="toggle-settings-btn">
+                        <i class="fa-solid fa-sliders"></i> Configuration
+                    </button>
+                </div>
+            </div>
+
+            <!-- Right Side: Server Audio Library -->
+            <div class="card files-card">
+                <div class="card-header">
+                    <h2><i class="fa-solid fa-folder-open card-icon"></i>Extracted Audio Library</h2>
+                    <span class="badge badge-info" id="file-count-badge">0 Files</span>
+                </div>
+
+                <div class="files-list-container">
+                    <div class="files-empty" id="files-empty">
+                        <i class="fa-solid fa-music empty-icon"></i>
+                        <p class="primary-text">No audio files extracted yet</p>
+                        <p class="secondary-text">Select and extract files to populate your local library.</p>
+                    </div>
+                    <div class="files-list hidden" id="files-list">
+                        <!-- Dynamic audio list will render here -->
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Settings Overlay Card -->
+    <div class="settings-modal-overlay hidden" id="settings-overlay">
+        <div class="card settings-modal">
+            <div class="card-header">
+                <h2><i class="fa-solid fa-sliders card-icon"></i>FFmpeg Path Configuration</h2>
+                <button class="btn-icon" id="close-settings-btn"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+            <div class="settings-modal-body">
+                <p class="settings-help-text">
+                    By default, the server searches for the global <code>ffmpeg</code> executable in your system PATH environment variable.
+                    If it is installed in a custom location, paste the absolute path to the executable file below.
+                </p>
+                <div class="settings-input-group">
+                    <label for="settings-ffmpeg-path" class="option-title">Custom FFmpeg Path</label>
+                    <input type="text" id="settings-ffmpeg-path" placeholder="e.g. C:\FFmpeg\bin\ffmpeg.exe" class="path-input">
+                </div>
+                <div class="settings-validation-box" id="settings-validation-status">
+                    <!-- Populated dynamically via JS -->
+                </div>
+                <button class="btn btn-primary btn-block" id="save-settings-btn">Save Settings</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Application script -->
+    <script src="/static/js/app.js"></script>
+</body>
+</html>
