@@ -453,6 +453,157 @@ def split_transcript_into_sentences(transcript_data):
 def chunking_view():
     return render_template('chunking.html')
 
+@app.route('/keypoints')
+def keypoints_view():
+    return render_template('keypoints.html')
+
+@app.route('/api/generate-session-keypoints', methods=['POST'])
+def generate_session_keypoints():
+    data = request.json or {}
+    sentences = data.get('sentences', [])
+    feedback = data.get('feedback', '').strip()
+    existing_heading = data.get('existing_heading', '')
+    existing_subheadings = data.get('existing_subheadings', [])
+    model_name = data.get('model', 'gemini-2.5-flash')
+    
+    # API key from headers, request body, or environment
+    api_key = request.headers.get('X-Gemini-Key') or data.get('api_key') or os.getenv('GEMINI_API_KEY')
+    
+    if not api_key:
+        return jsonify({'error': 'Gemini API Key is missing. Please configure GEMINI_API_KEY in your .env file.'}), 400
+        
+    if not sentences:
+        return jsonify({'error': 'No sentences provided for generating keypoints.'}), 400
+        
+    # Construct the session text
+    session_text = " ".join([s.get('text', '') for s in sentences])
+    
+    # Design prompt
+    if feedback:
+        existing_str = json.dumps({
+            "heading": existing_heading,
+            "subheadings": existing_subheadings
+        }, indent=2)
+        
+        prompt = f"""You are an expert curriculum designer, LMS architect, and instructional editor.
+Your task is to refine the heading and subheadings for a session of transcription text based on user feedback: "{feedback}".
+
+Here is the transcription text of the session:
+\"\"\"
+{session_text}
+\"\"\"
+
+Here is the existing structure:
+{existing_str}
+
+Please refine the heading and subheadings according to the feedback, adhering strictly to the guidelines below.
+
+GUIDELINES FOR HEADINGS & SUBHEADINGS:
+1. Heading: Represents "What category of learning are we inside?" (the main instructional unit title).
+   - Must be declarative and concept-centric (focused on stable academic concepts, frameworks, principles, categories, methods, theories).
+   - Do NOT make it conversational (e.g. Avoid "Now we will talk about testing", Use "Types of Psychological Tests").
+   - Do NOT focus on speaker personality, examples, or anecdotes.
+2. Subheadings: Define "What specific competencies/concepts belong to this category?"
+   - Must be competency-oriented, focusing on learner outcomes, and typically start with instructional design verbs (e.g. Explain, Differentiate, Describe, Recognize, Identify, Compare, Apply, Analyze).
+   - MUST BE EXTREMELY CONCISE: Exactly 4 or 5 words maximum per subheading. Must be a short set of words highlighting what is spoken about, NOT verbose/long sentences.
+   - Example of a bad verbose subheading: "Explain the difference between standardized psychological tests and developmental assessment methods." (12 words - too long!)
+   - Example of a good short subheading: "Differentiate Types of Psychological Tests" (5 words - concise, Bloom's Taxonomy verb, accurate!)
+   - Do NOT exceed 5 words under any circumstances.
+3. Tone: Professional, curriculum-oriented, instructional. Convert temporal spoken content into structured educational knowledge architecture.
+"""
+    else:
+        prompt = f"""You are an expert curriculum designer, LMS architect, and instructional editor.
+Your task is to analyze the transcription text of a session and convert it into structured educational knowledge architecture by generating exactly ONE main heading and a list of subheadings (key highlights).
+
+Here is the transcription text of the session:
+\"\"\"
+{session_text}
+\"\"\"
+
+Please generate:
+1. A single declarative, concept-centric main heading.
+2. A list of 2 to 5 competency-oriented subheadings summarizing the key concepts, competencies, or details taught.
+
+Adhere strictly to the guidelines below:
+
+GUIDELINES FOR HEADINGS & SUBHEADINGS:
+1. Heading: Represents "What category of learning are we inside?" (the main instructional unit title).
+   - Must be declarative and concept-centric (focused on stable academic concepts, frameworks, principles, categories, methods, theories).
+   - Do NOT make it conversational (e.g. Avoid "Now we will talk about testing", Use "Types of Psychological Tests").
+   - Do NOT focus on speaker personality, examples, or anecdotes.
+2. Subheadings: Define "What specific competencies/concepts belong to this category?"
+   - Must be competency-oriented, focusing on learner outcomes, and typically start with instructional design verbs (e.g. Explain, Differentiate, Describe, Recognize, Identify, Compare, Apply, Analyze).
+   - MUST BE EXTREMELY CONCISE: Exactly 4 or 5 words maximum per subheading. Must be a short set of words highlighting what is spoken about, NOT verbose/long sentences.
+   - Example of a bad verbose subheading: "Explain the difference between standardized psychological tests and developmental assessment methods." (12 words - too long!)
+   - Example of a good short subheading: "Differentiate Types of Psychological Tests" (5 words - concise, Bloom's Taxonomy verb, accurate!)
+   - Do NOT exceed 5 words under any circumstances.
+3. Tone: Professional, curriculum-oriented, instructional. Convert temporal spoken content into structured educational knowledge architecture.
+"""
+
+    import urllib.request
+    import urllib.error
+    
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/{model_name}:generateContent?key={api_key}"
+    
+    headers = {
+        'Content-Type': 'application/json'
+    }
+    
+    body = {
+        "contents": [
+            {
+                "parts": [
+                    {"text": prompt}
+                ]
+            }
+        ],
+        "generationConfig": {
+            "responseMimeType": "application/json",
+            "responseSchema": {
+                "type": "OBJECT",
+                "properties": {
+                    "heading": {"type": "STRING"},
+                    "subheadings": {
+                        "type": "ARRAY",
+                        "items": {"type": "STRING"}
+                    }
+                },
+                "required": ["heading", "subheadings"]
+            }
+        }
+    }
+    
+    try:
+        req = urllib.request.Request(url, data=json.dumps(body).encode('utf-8'), headers=headers, method='POST')
+        with urllib.request.urlopen(req, timeout=60) as response:
+            response_data = json.loads(response.read().decode('utf-8'))
+            
+        candidates = response_data.get('candidates', [])
+        if not candidates:
+            return jsonify({'error': 'No response candidates received from Gemini API.', 'details': response_data}), 500
+            
+        text_response = candidates[0].get('content', {}).get('parts', [{}])[0].get('text', '')
+        if not text_response:
+            return jsonify({'error': 'Empty response from Gemini API.', 'details': response_data}), 500
+            
+        result = json.loads(text_response.strip())
+        return jsonify({
+            'heading': result.get('heading', ''),
+            'subheadings': result.get('subheadings', [])
+        }), 200
+        
+    except urllib.error.HTTPError as e:
+        error_body = e.read().decode('utf-8')
+        try:
+            error_json = json.loads(error_body)
+            error_msg = error_json.get('error', {}).get('message', str(e))
+        except Exception:
+            error_msg = error_body or str(e)
+        return jsonify({'error': f"Gemini API HTTP Error: {error_msg}"}), e.code
+    except Exception as e:
+        return jsonify({'error': f"Failed to run Gemini keypoints generation: {str(e)}"}), 500
+
+
 @app.route('/api/sentences/<path:filename>', methods=['GET'])
 def get_sentences(filename):
     transcript_filename = f"{filename}.json"

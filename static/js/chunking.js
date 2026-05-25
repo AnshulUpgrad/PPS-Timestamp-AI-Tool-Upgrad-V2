@@ -18,6 +18,7 @@ const sentencesWrapper = document.getElementById('sentences-list-wrapper');
 const sentenceCountBadge = document.getElementById('sentence-count-badge');
 const btnAddSession = document.getElementById('btn-add-session');
 const btnSaveSessions = document.getElementById('btn-save-sessions');
+const btnConfirmChunks = document.getElementById('btn-confirm-chunks');
 const btnExportJson = document.getElementById('btn-export-json');
 const sessionsEmptyState = document.getElementById('sessions-empty-state');
 const sessionsList = document.getElementById('sessions-list');
@@ -101,6 +102,9 @@ function setupEventListeners() {
     // Save Chunks to Server
     btnSaveSessions.addEventListener('click', saveChunksToServer);
 
+    // Confirm Chunks & go to keypoints page
+    btnConfirmChunks.addEventListener('click', confirmChunksAndNext);
+
     // Export JSON file
     btnExportJson.addEventListener('click', exportSessionsJSON);
 
@@ -140,6 +144,7 @@ async function handleFileSelection(filename) {
     activeFile = filename;
     isDirty = false;
     btnSaveSessions.disabled = true;
+    btnConfirmChunks.disabled = true;
     
     // Set Audio source
     audioPlayer.src = `/uploads/${filename}`;
@@ -247,11 +252,13 @@ function renderSessions() {
     if (!sessions || sessions.length === 0) {
         sessionsEmptyState.classList.remove('hidden');
         sessionsList.classList.add('hidden');
+        btnConfirmChunks.disabled = true;
         return;
     }
 
     sessionsEmptyState.classList.add('hidden');
     sessionsList.classList.remove('hidden');
+    btnConfirmChunks.disabled = false;
 
     sessions.forEach((session, index) => {
         // Calculate session start and end based on sentences in it
@@ -485,6 +492,37 @@ async function saveChunksToServer() {
     }
 }
 
+async function confirmChunksAndNext() {
+    if (!activeFile || sessions.length === 0) {
+        alert('Please create some sessions first.');
+        return;
+    }
+    
+    btnConfirmChunks.disabled = true;
+    btnConfirmChunks.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Confirming...';
+    
+    try {
+        const resp = await fetch(`/api/save-chunks/${encodeURIComponent(activeFile)}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ sessions: sessions })
+        });
+        
+        const data = await resp.json();
+        
+        if (!resp.ok) throw new Error(data.error || 'Failed to confirm chunks');
+        
+        isDirty = false;
+        // Redirect to keypoints page
+        window.location.href = `/keypoints?file=${encodeURIComponent(activeFile)}`;
+    } catch (err) {
+        console.error(err);
+        alert('Error confirming chunks: ' + err.message);
+        btnConfirmChunks.disabled = false;
+        btnConfirmChunks.innerHTML = '<i class="fa-solid fa-circle-check"></i> Confirm Chunks';
+    }
+}
+
 function exportSessionsJSON() {
     if (sessions.length === 0) {
         alert('No sessions to export. Create sessions first!');
@@ -625,7 +663,9 @@ function splitSessionAtSentence(sentenceId) {
     const newSession = {
         title: `${session.title || 'Session'} (Split)`,
         summary: `Continued from: ${session.title || 'Previous Session'}`,
-        sentence_indices: afterIndices
+        sentence_indices: afterIndices,
+        heading: "",
+        subheadings: []
     };
 
     // Insert new session card after current session
@@ -707,7 +747,9 @@ function addSessionManually() {
     const newSession = {
         title: `Session ${sessions.length + 1}`,
         summary: `Summary of session ${sessions.length + 1}`,
-        sentence_indices: newIndices
+        sentence_indices: newIndices,
+        heading: "",
+        subheadings: []
     };
 
     sessions.push(newSession);

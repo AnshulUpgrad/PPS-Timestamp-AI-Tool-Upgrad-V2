@@ -1656,4 +1656,73 @@ audio::-webkit-media-controls-time-remaining-display {
     border-radius: 8px;
 }
 
+/* Keypoints Page Custom Styles */
+.heading-input {
+    flex: 1;
+    background: transparent;
+    border: none;
+    border-bottom: 1px solid var(--border-color);
+    color: white;
+    font-size: 0.88rem;
+    outline: none;
+    padding: 4px 6px;
+    font-family: var(--font-heading);
+    transition: var(--transition-smooth);
+}
+.heading-input:focus {
+    border-bottom-color: var(--accent-primary);
+    box-shadow: 0 1px 0 var(--accent-primary);
+}
+
+.subheading-input {
+    flex: 1;
+    background: transparent;
+    border: none;
+    border-bottom: 1px dashed rgba(255,255,255,0.1);
+    color: var(--color-text-secondary);
+    font-size: 0.82rem;
+    outline: none;
+    padding: 4px 6px;
+    font-family: var(--font-body);
+    transition: var(--transition-smooth);
+}
+.subheading-input:focus {
+    border-bottom-color: var(--accent-secondary);
+    border-bottom-style: solid;
+    color: white;
+}
+
+.btn-delete-point:hover, .btn-delete-sub:hover {
+    color: var(--color-danger) !important;
+    background: rgba(239, 68, 68, 0.15) !important;
+}
+
+.btn-add-sub:hover {
+    background: rgba(255, 255, 255, 0.05) !important;
+    border-color: var(--accent-secondary) !important;
+    color: white !important;
+}
+
+.refinement-input {
+    border: 1px solid var(--border-color);
+    background: rgba(255, 255, 255, 0.02);
+    border-radius: 10px;
+    color: white;
+    outline: none;
+    font-family: var(--font-body);
+    transition: var(--transition-smooth);
+}
+.refinement-input:focus {
+    border-color: var(--accent-primary);
+    box-shadow: 0 0 10px var(--accent-glow);
+    background: rgba(255, 255, 255, 0.04);
+}
+
+.session-loading-overlay {
+    backdrop-filter: blur(4px);
+    -webkit-backdrop-filter: blur(4px);
+    animation: fadeIn 0.25s ease-out;
+}
+
+
 
