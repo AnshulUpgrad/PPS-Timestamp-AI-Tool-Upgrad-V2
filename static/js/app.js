@@ -166,7 +166,7 @@ async function saveSettings() {
    NATIVE SELECT DIALOG FILE
    ========================================================================== */
 async function selectFileNatively() {
-    writeLog("Opening native OS file selection dialog...");
+    writeLog("Requesting file selection...");
     nativeBrowseFileBtn.disabled = true;
     changeFileBtn.disabled = true;
     
@@ -174,7 +174,10 @@ async function selectFileNatively() {
         const resp = await fetch('/api/select-file', { method: 'POST' });
         const data = await resp.json();
         
-        if (data.path) {
+        if (data.mode === 'colab') {
+            writeLog(`Received ${data.files.length} video files from Google Drive.`);
+            showColabFileModal(data.files, data.drive_folder);
+        } else if (data.path) {
             writeLog(`Selected file natively: ${data.path}`);
             selectedVideo = {
                 name: data.name,
@@ -200,11 +203,130 @@ async function selectFileNatively() {
         }
     } catch (err) {
         console.error(err);
-        writeLog(`Error selecting file natively: ${err.message}`);
+        writeLog(`Error selecting file: ${err.message}`);
     } finally {
         nativeBrowseFileBtn.disabled = false;
         changeFileBtn.disabled = false;
     }
+}
+
+function showColabFileModal(files, driveFolder) {
+    // Remove existing modal if any
+    const existing = document.getElementById('colab-file-modal');
+    if (existing) existing.remove();
+
+    const overlay = document.createElement('div');
+    overlay.className = 'colab-modal-overlay';
+    overlay.id = 'colab-file-modal';
+
+    let filesHtml = '';
+    if (files.length === 0) {
+        filesHtml = `
+            <div class="colab-empty-state">
+                <i class="fa-solid fa-folder-open"></i>
+                <p style="font-weight: 600; font-size: 1rem;">No video files found in Google Drive</p>
+                <p style="font-size: 0.8rem; color: var(--color-text-secondary); max-width: 400px; margin: 0 auto; line-height: 1.5;">
+                    Please upload video files (.mp4, .webm, .mov, etc.) to your Google Drive in the folder: <br><strong style="color: var(--accent-secondary); font-family: monospace; font-size: 0.85rem; background: rgba(255,255,255,0.05); padding: 2px 6px; border-radius: 4px; margin-top: 4px; display: inline-block;">My Drive / PPSimplify /</strong><br>then click the <strong>Refresh</strong> button below.
+                </p>
+            </div>
+        `;
+    } else {
+        filesHtml = `
+            <div class="colab-file-list">
+                ${files.map((file, index) => `
+                    <div class="colab-file-item" data-index="${index}" data-path="${escapeHtml(file.path)}" data-name="${escapeHtml(file.name)}" data-size="${escapeHtml(file.size)}" data-size-bytes="${file.size_bytes}">
+                        <div class="colab-file-info">
+                            <span class="colab-file-name" title="${escapeHtml(file.name)}">${escapeHtml(file.name)}</span>
+                            <span class="colab-file-size"><i class="fa-solid fa-weight-hanging" style="font-size: 0.7rem; margin-right: 4px;"></i> ${escapeHtml(file.size)}</span>
+                        </div>
+                        <i class="fa-solid fa-circle-check" style="color: var(--color-success); opacity: 0; transition: var(--transition-smooth); font-size: 1.1rem;"></i>
+                    </div>
+                `).join('')}
+            </div>
+        `;
+    }
+
+    overlay.innerHTML = `
+        <div class="colab-modal">
+            <div class="colab-modal-header">
+                <h2><i class="fa-brands fa-google-drive" style="color: #25a867;"></i> Select File from Google Drive</h2>
+                <button class="btn-icon" id="colab-modal-close-btn"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+            <div class="colab-modal-body">
+                <p class="colab-help-text">
+                    Choose a video file to extract audio and transcribe. This scans the folder: <code>My Drive/PPSimplify</code>.
+                </p>
+                ${filesHtml}
+            </div>
+            <div class="colab-modal-footer">
+                <button class="btn btn-secondary" id="colab-modal-refresh-btn"><i class="fa-solid fa-arrows-rotate"></i> Refresh</button>
+                <button class="btn btn-primary" id="colab-modal-select-btn" disabled><i class="fa-solid fa-check"></i> Select Video</button>
+            </div>
+        </div>
+    `;
+
+    document.body.appendChild(overlay);
+
+    let selectedItem = null;
+    const fileItems = overlay.querySelectorAll('.colab-file-item');
+    const selectBtn = overlay.querySelector('#colab-modal-select-btn');
+    const closeBtn = overlay.querySelector('#colab-modal-close-btn');
+    const refreshBtn = overlay.querySelector('#colab-modal-refresh-btn');
+
+    fileItems.forEach(item => {
+        item.addEventListener('click', () => {
+            // Deselect previously selected
+            fileItems.forEach(i => {
+                i.classList.remove('selected');
+                i.querySelector('i.fa-circle-check').style.opacity = 0;
+            });
+            
+            // Select clicked
+            item.classList.add('selected');
+            item.querySelector('i.fa-circle-check').style.opacity = 1;
+            
+            selectedItem = {
+                name: item.getAttribute('data-name'),
+                path: item.getAttribute('data-path'),
+                size: item.getAttribute('data-size'),
+                size_bytes: parseInt(item.getAttribute('data-size-bytes'), 10)
+            };
+            selectBtn.disabled = false;
+        });
+    });
+
+    closeBtn.addEventListener('click', () => {
+        overlay.remove();
+        writeLog("Google Drive file selection cancelled.");
+    });
+
+    refreshBtn.addEventListener('click', async () => {
+        overlay.remove();
+        writeLog("Refreshing Google Drive file list...");
+        await selectFileNatively();
+    });
+
+    selectBtn.addEventListener('click', () => {
+        if (selectedItem) {
+            writeLog(`Selected Google Drive file: ${selectedItem.name}`);
+            selectedVideo = selectedItem;
+            
+            // Populate selection card UI
+            fileNameEl.textContent = selectedVideo.name;
+            fileNameEl.title = selectedVideo.path;
+            fileSizeEl.textContent = selectedVideo.size;
+            
+            // Toggle panel displays
+            selectHeroContainer.classList.add('hidden');
+            fileDetails.classList.remove('hidden');
+            
+            // Check FFmpeg status and toggle process button
+            const isFfmpegActive = !ffmpegStatusBadge.classList.contains('badge-danger');
+            processBtn.disabled = !isFfmpegActive;
+            
+            overlay.remove();
+        }
+    });
 }
 
 /* ==========================================================================
