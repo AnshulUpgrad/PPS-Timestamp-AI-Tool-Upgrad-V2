@@ -25,30 +25,10 @@ app = Flask(__name__)
 # Detect Google Colab environment (checks if Google Drive is mounted or if Colab packages exist)
 IS_COLAB = os.path.exists('/content/drive') or 'google.colab' in sys.modules or os.environ.get('IS_COLAB') == 'true'
 
-if IS_COLAB:
-    # Use Google Drive for persistent uploads and config files
-    DRIVE_BASE = '/content/drive/MyDrive/PPSimplify'
-    UPLOAD_FOLDER = os.path.join(DRIVE_BASE, 'uploads')
-    CONFIG_FILE = os.path.join(DRIVE_BASE, 'config.json')
-    
-    # Ensure Google Drive folder structure exists
-    os.makedirs(DRIVE_BASE, exist_ok=True)
-    os.makedirs(UPLOAD_FOLDER, exist_ok=True)
-    
-    # Create input instructions README if missing
-    readme_path = os.path.join(DRIVE_BASE, 'README_INPUT.txt')
-    if not os.path.exists(readme_path):
-        try:
-            with open(readme_path, 'w', encoding='utf-8') as f:
-                f.write("Place your video files (.mp4, .webm, .mov, etc.) directly in this folder (PPSimplify).\n"
-                        "The web application will automatically scan this folder and let you select files.")
-        except Exception:
-            pass
-else:
-    # Local developer fallback
-    UPLOAD_FOLDER = os.path.join(os.path.abspath(os.path.dirname(__file__)), 'uploads')
-    CONFIG_FILE = os.path.join(os.path.abspath(os.path.dirname(__file__)), 'config.json')
-    os.makedirs(UPLOAD_FOLDER, exist_ok=True)
+# Use local uploads folder for all environments (no Google Drive dependency)
+UPLOAD_FOLDER = os.path.join(os.path.abspath(os.path.dirname(__file__)), 'uploads')
+CONFIG_FILE = os.path.join(os.path.abspath(os.path.dirname(__file__)), 'config.json')
+os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 
@@ -100,39 +80,50 @@ def run_native_dialog(script):
 def index():
     return render_template('index.html')
 
+@app.route('/api/env', methods=['GET'])
+def get_env():
+    return jsonify({
+        'is_colab': IS_COLAB
+    }), 200
+
+@app.route('/api/upload', methods=['POST'])
+def upload_file():
+    if 'file' not in request.files:
+        return jsonify({'error': 'No file part in the request'}), 400
+    file = request.files['file']
+    if file.filename == '':
+        return jsonify({'error': 'No selected file'}), 400
+    
+    if file:
+        filename = secure_filename(file.filename)
+        # Ensure filename is unique to avoid overwriting
+        base_name, ext = os.path.splitext(filename)
+        counter = 1
+        unique_name = filename
+        while os.path.exists(os.path.join(app.config['UPLOAD_FOLDER'], unique_name)):
+            unique_name = f"{base_name}_{counter}{ext}"
+            counter += 1
+            
+        filepath = os.path.join(app.config['UPLOAD_FOLDER'], unique_name)
+        file.save(filepath)
+        
+        size_bytes = os.path.getsize(filepath)
+        size_mb = size_bytes / (1024 * 1024)
+        
+        return jsonify({
+            'path': filepath,
+            'name': unique_name,
+            'size': f"{round(size_mb, 2)} MB",
+            'size_bytes': size_bytes
+        }), 200
+    return jsonify({'error': 'Upload failed'}), 500
+
 @app.route('/api/select-file', methods=['POST'])
 def select_file():
     if IS_COLAB:
-        drive_base = '/content/drive/MyDrive/PPSimplify'
-        os.makedirs(drive_base, exist_ok=True)
-        
-        # Scan for common video extensions
-        video_extensions = ('.mp4', '.webm', '.mov', '.avi', '.mkv', '.m4v')
-        files_found = []
-        
-        try:
-            for item in os.listdir(drive_base):
-                item_path = os.path.join(drive_base, item)
-                if os.path.isfile(item_path) and item.lower().endswith(video_extensions):
-                    size_bytes = os.path.getsize(item_path)
-                    size_mb = size_bytes / (1024 * 1024)
-                    files_found.append({
-                        'name': item,
-                        'path': item_path,
-                        'size': f"{round(size_mb, 2)} MB",
-                        'size_bytes': size_bytes
-                    })
-            
-            # Sort alphabetically
-            files_found.sort(key=lambda x: x['name'].lower())
-            
-            return jsonify({
-                'mode': 'colab',
-                'files': files_found,
-                'drive_folder': drive_base
-            }), 200
-        except Exception as e:
-            return jsonify({'error': f"Failed to scan Google Drive: {str(e)}"}), 500
+        return jsonify({
+            'mode': 'colab'
+        }), 200
 
     # Local fallback
     script = """

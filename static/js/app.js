@@ -1,6 +1,8 @@
 // State
 let selectedVideo = null; // { name, path, size, size_bytes }
 let isProcessing = false;
+let isColabMode = false;
+let fileToUpload = null;
 
 // DOM Elements - Selection Hero / Details
 const selectHeroContainer = document.getElementById('select-hero-container');
@@ -46,6 +48,7 @@ const fileCountBadge = document.getElementById('file-count-badge');
    INITIALIZATION & EVENT LISTENERS
    ========================================================================== */
 document.addEventListener('DOMContentLoaded', () => {
+    checkEnvMode();
     setupEventListeners();
     checkFFmpegStatus();
     loadAudioLibrary();
@@ -55,6 +58,11 @@ function setupEventListeners() {
     // Selection Dialogs
     nativeBrowseFileBtn.addEventListener('click', selectFileNatively);
     changeFileBtn.addEventListener('click', selectFileNatively);
+
+    const webFileInput = document.getElementById('web-file-input');
+    if (webFileInput) {
+        webFileInput.addEventListener('change', handleWebFileSelect);
+    }
 
     // Settings
     toggleSettingsBtn.addEventListener('click', openSettingsModal);
@@ -163,10 +171,29 @@ async function saveSettings() {
 }
 
 /* ==========================================================================
-   NATIVE SELECT DIALOG FILE
+   ENVIRONMENT DETECTION & FILE UPLOAD
    ========================================================================== */
+async function checkEnvMode() {
+    try {
+        const resp = await fetch('/api/env');
+        const data = await resp.json();
+        isColabMode = data.is_colab;
+        if (isColabMode) {
+            writeLog("Colab Mode detected: File browser changed to local desktop upload.");
+        }
+    } catch (e) {
+        console.error("Failed to detect environment mode:", e);
+    }
+}
+
 async function selectFileNatively() {
-    writeLog("Requesting file selection...");
+    if (isColabMode) {
+        // Trigger browser file input click
+        document.getElementById('web-file-input').click();
+        return;
+    }
+
+    writeLog("Requesting native OS file selection...");
     nativeBrowseFileBtn.disabled = true;
     changeFileBtn.disabled = true;
     
@@ -174,10 +201,7 @@ async function selectFileNatively() {
         const resp = await fetch('/api/select-file', { method: 'POST' });
         const data = await resp.json();
         
-        if (data.mode === 'colab') {
-            writeLog(`Received ${data.files.length} video files from Google Drive.`);
-            showColabFileModal(data.files, data.drive_folder);
-        } else if (data.path) {
+        if (data.path) {
             writeLog(`Selected file natively: ${data.path}`);
             selectedVideo = {
                 name: data.name,
@@ -203,129 +227,76 @@ async function selectFileNatively() {
         }
     } catch (err) {
         console.error(err);
-        writeLog(`Error selecting file: ${err.message}`);
+        writeLog(`Error selecting file natively: ${err.message}`);
     } finally {
         nativeBrowseFileBtn.disabled = false;
         changeFileBtn.disabled = false;
     }
 }
 
-function showColabFileModal(files, driveFolder) {
-    // Remove existing modal if any
-    const existing = document.getElementById('colab-file-modal');
-    if (existing) existing.remove();
+function handleWebFileSelect(e) {
+    const file = e.target.files[0];
+    if (!file) return;
 
-    const overlay = document.createElement('div');
-    overlay.className = 'colab-modal-overlay';
-    overlay.id = 'colab-file-modal';
+    writeLog(`Selected local file for upload: ${file.name} (${formatBytes(file.size)})`);
+    fileToUpload = file;
 
-    let filesHtml = '';
-    if (files.length === 0) {
-        filesHtml = `
-            <div class="colab-empty-state">
-                <i class="fa-solid fa-folder-open"></i>
-                <p style="font-weight: 600; font-size: 1rem;">No video files found in Google Drive</p>
-                <p style="font-size: 0.8rem; color: var(--color-text-secondary); max-width: 400px; margin: 0 auto; line-height: 1.5;">
-                    Please upload video files (.mp4, .webm, .mov, etc.) to your Google Drive in the folder: <br><strong style="color: var(--accent-secondary); font-family: monospace; font-size: 0.85rem; background: rgba(255,255,255,0.05); padding: 2px 6px; border-radius: 4px; margin-top: 4px; display: inline-block;">My Drive / PPSimplify /</strong><br>then click the <strong>Refresh</strong> button below.
-                </p>
-            </div>
-        `;
-    } else {
-        filesHtml = `
-            <div class="colab-file-list">
-                ${files.map((file, index) => `
-                    <div class="colab-file-item" data-index="${index}" data-path="${escapeHtml(file.path)}" data-name="${escapeHtml(file.name)}" data-size="${escapeHtml(file.size)}" data-size-bytes="${file.size_bytes}">
-                        <div class="colab-file-info">
-                            <span class="colab-file-name" title="${escapeHtml(file.name)}">${escapeHtml(file.name)}</span>
-                            <span class="colab-file-size"><i class="fa-solid fa-weight-hanging" style="font-size: 0.7rem; margin-right: 4px;"></i> ${escapeHtml(file.size)}</span>
-                        </div>
-                        <i class="fa-solid fa-circle-check" style="color: var(--color-success); opacity: 0; transition: var(--transition-smooth); font-size: 1.1rem;"></i>
-                    </div>
-                `).join('')}
-            </div>
-        `;
-    }
+    selectedVideo = {
+        name: file.name,
+        path: file.name, // Temporary placeholder
+        size: formatBytes(file.size),
+        size_bytes: file.size
+    };
 
-    overlay.innerHTML = `
-        <div class="colab-modal">
-            <div class="colab-modal-header">
-                <h2><i class="fa-brands fa-google-drive" style="color: #25a867;"></i> Select File from Google Drive</h2>
-                <button class="btn-icon" id="colab-modal-close-btn"><i class="fa-solid fa-xmark"></i></button>
-            </div>
-            <div class="colab-modal-body">
-                <p class="colab-help-text">
-                    Choose a video file to extract audio and transcribe. This scans the folder: <code>My Drive/PPSimplify</code>.
-                </p>
-                ${filesHtml}
-            </div>
-            <div class="colab-modal-footer">
-                <button class="btn btn-secondary" id="colab-modal-refresh-btn"><i class="fa-solid fa-arrows-rotate"></i> Refresh</button>
-                <button class="btn btn-primary" id="colab-modal-select-btn" disabled><i class="fa-solid fa-check"></i> Select Video</button>
-            </div>
-        </div>
-    `;
+    // Populate selection card UI
+    fileNameEl.textContent = file.name;
+    fileNameEl.title = file.name;
+    fileSizeEl.textContent = formatBytes(file.size);
 
-    document.body.appendChild(overlay);
+    // Toggle panel displays
+    selectHeroContainer.classList.add('hidden');
+    fileDetails.classList.remove('hidden');
+    processBtn.disabled = false;
+}
 
-    let selectedItem = null;
-    const fileItems = overlay.querySelectorAll('.colab-file-item');
-    const selectBtn = overlay.querySelector('#colab-modal-select-btn');
-    const closeBtn = overlay.querySelector('#colab-modal-close-btn');
-    const refreshBtn = overlay.querySelector('#colab-modal-refresh-btn');
+function uploadFileWithProgress(file, progressCallback) {
+    return new Promise((resolve, reject) => {
+        const formData = new FormData();
+        formData.append('file', file);
 
-    fileItems.forEach(item => {
-        item.addEventListener('click', () => {
-            // Deselect previously selected
-            fileItems.forEach(i => {
-                i.classList.remove('selected');
-                i.querySelector('i.fa-circle-check').style.opacity = 0;
-            });
-            
-            // Select clicked
-            item.classList.add('selected');
-            item.querySelector('i.fa-circle-check').style.opacity = 1;
-            
-            selectedItem = {
-                name: item.getAttribute('data-name'),
-                path: item.getAttribute('data-path'),
-                size: item.getAttribute('data-size'),
-                size_bytes: parseInt(item.getAttribute('data-size-bytes'), 10)
-            };
-            selectBtn.disabled = false;
+        const xhr = new XMLHttpRequest();
+        xhr.open('POST', '/api/upload', true);
+
+        xhr.upload.addEventListener('progress', (e) => {
+            if (e.lengthComputable) {
+                const percent = Math.round((e.loaded / e.total) * 100);
+                progressCallback(percent, e.loaded, e.total);
+            }
         });
-    });
 
-    closeBtn.addEventListener('click', () => {
-        overlay.remove();
-        writeLog("Google Drive file selection cancelled.");
-    });
+        xhr.onload = () => {
+            if (xhr.status === 200) {
+                try {
+                    const data = JSON.parse(xhr.responseText);
+                    resolve(data);
+                } catch (err) {
+                    reject(new Error('Failed to parse upload response.'));
+                }
+            } else {
+                let errMsg = 'Upload failed.';
+                try {
+                    const errData = JSON.parse(xhr.responseText);
+                    errMsg = errData.error || errMsg;
+                } catch(e) {}
+                reject(new Error(errMsg));
+            }
+        };
 
-    refreshBtn.addEventListener('click', async () => {
-        overlay.remove();
-        writeLog("Refreshing Google Drive file list...");
-        await selectFileNatively();
-    });
+        xhr.onerror = () => {
+            reject(new Error('Network error during file upload.'));
+        };
 
-    selectBtn.addEventListener('click', () => {
-        if (selectedItem) {
-            writeLog(`Selected Google Drive file: ${selectedItem.name}`);
-            selectedVideo = selectedItem;
-            
-            // Populate selection card UI
-            fileNameEl.textContent = selectedVideo.name;
-            fileNameEl.title = selectedVideo.path;
-            fileSizeEl.textContent = selectedVideo.size;
-            
-            // Toggle panel displays
-            selectHeroContainer.classList.add('hidden');
-            fileDetails.classList.remove('hidden');
-            
-            // Check FFmpeg status and toggle process button
-            const isFfmpegActive = !ffmpegStatusBadge.classList.contains('badge-danger');
-            processBtn.disabled = !isFfmpegActive;
-            
-            overlay.remove();
-        }
+        xhr.send(formData);
     });
 }
 
@@ -366,9 +337,34 @@ async function runNativeExtraction() {
     logChevron.classList.add('rotated');
     
     const extractionMode = document.querySelector('input[name="extraction-mode"]:checked').value;
-    writeLog(`Native extraction pipeline started for file: ${selectedVideo.path}`);
+    writeLog(`Native extraction pipeline started for file: ${selectedVideo.name}`);
 
     try {
+        // --- OPTIONAL UPLOAD STEP FOR COLAB ---
+        if (isColabMode && fileToUpload) {
+            updateStepState(stepWasm, 'active');
+            const stepWasmTitle = stepWasm.querySelector('.step-title');
+            stepWasmTitle.textContent = 'Uploading video file';
+            
+            writeLog(`Uploading video file to Colab server: ${fileToUpload.name} (${formatBytes(fileToUpload.size)})...`);
+            
+            // Perform the upload with a progress callback
+            const uploadResult = await uploadFileWithProgress(fileToUpload, (percent, loaded, total) => {
+                stepWasmDesc.textContent = `${percent}% uploaded (${formatBytes(loaded)} / ${formatBytes(total)})`;
+            });
+            
+            writeLog(`Upload complete. Saved as ${uploadResult.name} inside container.`);
+            selectedVideo = {
+                name: uploadResult.name,
+                path: uploadResult.path,
+                size: uploadResult.size,
+                size_bytes: uploadResult.size_bytes
+            };
+            
+            stepWasmTitle.textContent = 'Preparing files';
+            fileToUpload = null; // Clear file reference
+        }
+
         // --- STEP 1: PREPARING ---
         updateStepState(stepWasm, 'active');
         stepWasmDesc.textContent = 'Preparing workspace...';
@@ -466,7 +462,14 @@ function updateStepState(stepElement, state) {
 function resetProcessingUI() {
     selectedVideo = null;
     isProcessing = false;
+    fileToUpload = null;
     
+    const webFileInput = document.getElementById('web-file-input');
+    if (webFileInput) webFileInput.value = '';
+
+    const stepWasmTitle = stepWasm.querySelector('.step-title');
+    if (stepWasmTitle) stepWasmTitle.textContent = 'Preparing files';
+
     const stepTranscribe = document.getElementById('step-transcribe');
     const stepTranscribeDesc = document.getElementById('step-transcribe-desc');
     
