@@ -334,6 +334,14 @@ function renderKeypointsList() {
                                     <option value="Face Only">Face Only</option>
                                     <option value="Type Template 1">Type Template 1</option>
                                     <option value="Type Template 2">Type Template 2</option>
+                                    <option value="Type Template No 16">Type Template No 16</option>
+                                    <option value="Type Template No 17">Type Template No 17</option>
+                                    <option value="Type Template No 18">Type Template No 18</option>
+                                    <option value="Type Template No 18 OG">Type Template No 18 OG</option>
+                                    <option value="Type Template No 20">Type Template No 20</option>
+                                    <option value="Type Template No 20 OG">Type Template No 20 OG</option>
+                                    <option value="Type Template No 21">Type Template No 21</option>
+                                    <option value="Type Template No 21 OG">Type Template No 21 OG</option>
                                     <option value="Process Template 1">Process Template 1</option>
                                     <option value="Process Template 2">Process Template 2</option>
                                     <option value="Process Template 3">Process Template 3</option>

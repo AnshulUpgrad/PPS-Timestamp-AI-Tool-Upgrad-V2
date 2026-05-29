@@ -1,0 +1,314 @@
+Overall Video Guidelines
+Ensure the Plate Heading is as short as possible (cannot exceed two lines).
+
+Stick to the word guidelines as font sizes are fixed.
+
+Headings must be ALL CAPS.
+
+Subheadings must be Title Case.
+
+Description Text must be Sentence case.
+
+Use line icons; black fill icons should be avoided.
+
+Template No. 1 - OG Types (Few bullets)
+Heading can only be a maximum of two lines (not more than 32 letters).
+
+Points or sub-points cannot exceed 3.
+
+Icons can only be replaced when using numbers or Short Forms; otherwise, they cannot be replaced.
+
+Images cannot be used.
+
+If there are more than 4 types, the first point can slide out, and the total can be split into two plates.
+
+You need to provide icons.
+
+Template No. 2 - OG Types (Many bullets)
+Heading can only be a maximum of two lines (not more than 32 characters).
+
+Points or sub-points can be as many as needed; previous points will slide up.
+
+Icons can only be replaced when using numbers or Short Forms; otherwise, they cannot be replaced.
+
+Images cannot be used.
+
+You need to provide icons.
+
+Template No. 4 & 4A - OG Process (One line description / Few bullets)
+If pointers are used, align them to the text.
+
+Maximum of 2 lines of pointers allowed. Pointers should be in bullets.
+
+Heading can only be a maximum of two lines (not more than 20 letters).
+
+If there are more than 4 types, the first type can slide out.
+
+Images cannot be used.
+
+Template No. 5 - OG Process (Few bullets)
+Heading can only be a maximum of two lines (not more than 32 letters).
+
+Can be used with or without icons, depending on the text.
+
+If there are more than 2 pointers, icons can be removed.
+
+Pointers can be faded to fit additional points.
+
+Images cannot be used.
+
+If there are more than 4 types, the first type can slide out.
+
+Template No. 6 - OG Process (Many bullets)
+Heading can only be a maximum of two lines (not more than 32 letters).
+
+Points or sub-points can be as many as needed; previous points will slide up.
+
+If there are more than 4 types, the first type can slide out.
+
+Icons and images cannot be used.
+
+Template No. 7 - OG Differentiation (Only text)
+Each point can be a maximum of 3 lines.
+
+Cannot have images or icons.
+
+If there are more than 4 differences, the first 1 or 2 points can slide out, or the total can be split into two plates.
+
+Template No. 8 - OG Differentiation (Topic/Image)
+Images with little text can be used.
+
+Must be used for differences only.
+
+The heading of the two sides should not exceed 3 words.
+
+Description and pointers (maximum 2-3 lines) can be added below the image.
+
+Template No. 9 - OG Timeline (1 line description)
+No pointers can be added.
+
+Text can be replaced with images.
+
+Can have more than 5 timestamps.
+
+Template No. 10 - OG Timeline (Horizontal with bullets)
+Icons and images cannot be used.
+
+Heading cannot exceed 32 letters.
+
+Can have as many points as needed.
+
+Can have more than 5 timestamps.
+
+Template No. 11 - OG (Hierarchy)
+Heading must be ALL CAPS, Text must be Title Case.
+
+Images cannot be used.
+
+Points cannot be more than two lines.
+
+Can have as many points as needed.
+
+Template No. 12, 13 & 14 - OG Graphs (Line, Bar, Pie)
+X-Y Axis Description must be Sentence case (for Line/Bar).
+
+Sub-points can appear on the right side.
+
+Needs a heading.
+
+Ensure the source is provided for graphs (use "Courtesy: Company name" if a print advertisement is used).
+
+Template No. 15 - OG (% Increase)
+X-Y Axis Description must be Sentence case.
+
+Sub-points can appear on the right side.
+
+Needs a heading.
+
+Ensure the source is provided (use "Courtesy: Company name" if a print advertisement is used).
+
+Template No. 16 - Split screen (Types with description)
+Can be used without a subheading (centre aligned).
+
+Can have pointers.
+
+Description cannot exceed 3 lines.
+
+Images cannot be used.
+
+If there are more than 4 types, the first type can slide out, and the total can be split into two plates.
+
+Need to provide icons or use numbers.
+
+Template No. 17 - Split screen & OG (Bullets with many sub-bullets)
+Cannot be used if the heading exceeds two lines.
+
+Can have images.
+
+If there are more than 5 types, the first type can slide out, and the total can be split into two plates.
+
+Images can be used inside the sub-text box, or outside it (but only for a few seconds).
+
+Template No. 18 - Split screen & OG (Question and answer)
+Questions must be Sentence case.
+
+Cannot be used if the question exceeds two lines.
+
+If there are more than 3 questions, the first can slide out, and the total can be split into two plates.
+
+Only use this when both questions and answers need to be shown; otherwise, opt for the Question box.
+
+One question can have 2-3 answers. The box will extend to accommodate the answer.
+
+Template No. 20 - Split screen & OG (2 Types with few bullets)
+If only a description/paragraph is used, centre align it. If pointers are used, left-align them.
+
+Cannot be used if the description exceeds five lines.
+
+Heading cannot exceed 32 characters or two lines.
+
+Template No. 21 - Split screen (3 types)
+Heading should be a maximum of two words.
+
+Icons can be replaced with a short description (though not recommended).
+
+Subheading inside the circle can be a maximum of 2-3 words.
+
+Use OG template if there are subpointers.
+
+Template No. 22 - Split Screen & OG
+Heading should be a maximum of two words.
+
+Icons cannot be omitted, but they can be replaced with numbers.
+
+Can show a maximum of five at a time; otherwise, the first two will slide up.
+
+Word count should not be exceeded (Maximum 10 words).
+
+Template No. 23 - Split screen & OG (Process with 1 line)
+Heading formatting varies: Title Case for short words, Sentence case for longer sentences.
+
+Heading should be a maximum of two lines.
+
+Icons can be replaced with numbers.
+
+Can show a maximum of five at a time; otherwise, the first will slide up.
+
+Best used for showing a process or flow.
+
+Template No. 24 - Glassbox & Split Screen (Percentage)
+Heading is only allowed when using the Split Screen version (it is optional).
+
+Highlight words need to be provided in the PPS.
+
+Template No. 25 - Glassbox (Company logo)
+Used only for logos and images.
+
+No heading or description can be used.
+
+Template No. 26 - Question Box (Standard & OG)
+Question can have a maximum of 4 lines.
+
+Template No. 27 - Definition plate
+Subheading is optional.
+
+Highlight words need to be provided in the PPS.
+
+The vector on the right should be provided in the PPS.
+
+Pointers can be used, but they are not recommended.
+
+Template No. 28 - Quote plate (Standard, A, OG)
+Keywords should be in black and bold.
+
+Do not use a full stop at the end.
+
+Highlight words need to be provided in the PPS.
+
+Image of the speaker (quoting) cannot be added.
+
+Template No. 29 - Takeaway plate (Standard, Split screen, OG)
+Headings are not allowed.
+
+Highlight words need to be provided in the PPS.
+
+No full stops.
+
+The takeaway cannot exceed 14-18 words (can exceed this limit only when using the OG version).
+
+Template No. 40 - Image with Description
+If it is an image of a person, there must be a label with their name.
+
+Can be used universally; place the source at the bottom if applicable.
+
+Text can be formatted as pointers.
+
+Text inside the box does not need an ending period.
+
+Template No. 41 - Pointers
+Used for text-oriented graphic plates.
+
+Cannot contain sub-points.
+
+Maximum of 2 lines for one pointer.
+
+If there are more than 6 points, the first point can slide up.
+
+Soft Skills Template 2
+Maximum of 2 lines (approximately 25 words).
+
+Mindmap & Summary Graphics
+NMIMS Mind MAP: Circle is animation-intensive and dynamic. Specific to NMIMS. Not effective when professors are speaking.
+
+IMT Mind MAP: Used only for module mapping (for every course). No text inside the circle; keep it as a full-caps heading on top.
+
+Module Completion: Segment turns green to indicate a finished module.
+
+Identified Problem/Solution: Mindmaps and summaries should avoid being text-heavy and still. Use engaging templates that mention learning outcomes, and ensure summary videos loop back to the mindmap for a bigger picture.
+
+Importance Plate
+Appears at the start of every Mindmap to state the importance of studying the module.
+
+Description can be a maximum of 2 lines.
+
+Word limit is 10-12 words maximum per point.
+
+Template No. 30 - Box Plate (Horizontal)
+Heading cannot be more than 32 characters.
+
+Sub-pointers must be Sentence case and limited to 5 words.
+
+Can only have 4 or fewer boxes.
+
+Template No. 31 - Box Plate (Vertical)
+Only for LLM.
+
+Heading cannot be more than 32 characters.
+
+Can have sub-pointers.
+
+Can only have 3 or fewer boxes.
+
+Template No. 32 - Fact/Background Plate (OG & Split Screen)
+Heading cannot be more than 32 characters.
+
+It is mandatory to have a Fact/Background.
+
+Can have sub-pointers.
+
+Template No. 33 - Fact Plate (OG & Split Screen)
+Heading cannot be more than 32 characters.
+
+It is mandatory to have a Fact/Background.
+
+Can have as many sub-points as needed.
+
+Template No. 35 - Split Screen (Glassbox)
+Text/Description should be Sentence case.
+
+If it is only one sentence, it must be Sentence case.
+
+Template No. 36 - OG (Heavy Text Plate)
+Heading cannot be more than 32 characters.
+
+Designed exclusively for text-heavy content.

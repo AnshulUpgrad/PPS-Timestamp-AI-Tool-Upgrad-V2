@@ -114,9 +114,46 @@ Educational breakdowns
 Conceptual teaching
 Detailed category explanations
 Academic comparisons
-Avoid When
-The transcript only briefly mentions types
-Information is too short
+Type Template No 16
+Purpose
+
+Select when using a split-screen layout (speaker on the left, graphics on the right) and the speech involves outlining a sequence of up to four distinct steps or concepts, where each point requires a short description or a brief bulleted list.
+
+Type Template No 17
+Purpose
+
+Select when using a split-screen layout (speaker on the left, graphics on the right) and the speech introduces numbered points but requires a deep dive, an expanded detailed text explanation, or the inclusion of supporting graphics and images for a specific item on the list.
+
+Type Template No 18
+Purpose
+
+Select when using a split-screen layout (speaker on the left, graphics on the right) and the speech involves a structured question-and-answer format, displaying specific questions (e.g., Q1, Q2) alongside one or more of their corresponding answers.
+
+Type Template No 18 OG
+Purpose
+
+Select when using a full-page layout (no speaker visible) and the speech involves a structured question-and-answer format, displaying specific questions (e.g., Q1, Q2, Q3) alongside one or more of their corresponding answers.
+
+Type Template No 20
+Purpose
+
+Select when using a split-screen layout (speaker on the left, graphics on the right) and the speech outlines two distinct types, categories, or concepts, where each requires a short description or a few small bullet points.
+
+Type Template No 20 OG
+Purpose
+
+Select when using a full-page layout (no speaker visible) and the speech outlines two distinct types, categories, or concepts, side-by-side, where each requires a short description or a few small bullet points.
+
+Type Template No 21
+Purpose
+
+Select when using a split-screen layout (speaker on the left, graphics on the right) and the speech outlines three distinct types or concepts, where each requires only a subheading and a supporting graphic without additional text or bullet points.
+
+Type Template No 21 OG
+Purpose
+
+Select when using a full-page layout (no speaker visible) and the speech outlines three distinct types or concepts represented by graphics and subheadings, where specific concepts require brief text callouts or short points branching off from them.
+
 PROCESS TEMPLATES
 
 Used when the speaker explains:
