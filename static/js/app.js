@@ -375,6 +375,9 @@ async function runNativeExtraction() {
         stepWasmDesc.textContent = 'Preparing workspace...';
         
         const settingsResp = await fetch('/api/settings');
+        if (!settingsResp.ok) {
+            throw new Error(`Failed to load system settings (Server status: ${settingsResp.status}). Check flask.log for details.`);
+        }
         const settingsData = await settingsResp.json();
         
         if (!settingsData.is_valid) {
@@ -399,11 +402,18 @@ async function runNativeExtraction() {
             })
         });
         
-        const data = await extractResp.json();
-        
         if (!extractResp.ok) {
-            throw new Error(data.error || 'Audio extraction failed.');
+            let errMsg = 'Audio extraction failed.';
+            try {
+                const errData = await extractResp.json();
+                errMsg = errData.error || errMsg;
+            } catch (e) {
+                errMsg = `Server error during audio extraction (Status: ${extractResp.status}). Please check flask.log in Google Colab for details.`;
+            }
+            throw new Error(errMsg);
         }
+        
+        const data = await extractResp.json();
         
         updateStepState(stepExtract, 'completed');
         stepExtractDesc.textContent = 'Audio successfully extracted';
@@ -427,11 +437,18 @@ async function runNativeExtraction() {
             })
         });
         
-        const transcribeData = await transcribeResp.json();
         if (!transcribeResp.ok) {
-            throw new Error(transcribeData.error || 'Speech conversion failed.');
+            let errMsg = 'Speech conversion failed.';
+            try {
+                const errData = await transcribeResp.json();
+                errMsg = errData.error || errMsg;
+            } catch (e) {
+                errMsg = `Server error during transcription (Status: ${transcribeResp.status}). Please check flask.log in Google Colab for details.`;
+            }
+            throw new Error(errMsg);
         }
         
+        const transcribeData = await transcribeResp.json();
         updateStepState(stepTranscribe, 'completed');
         stepTranscribeDesc.textContent = `Completed! (${transcribeData.transcript.language.toUpperCase()})`;
         writeLog(`Speech-to-text successful: saved transcription metadata for ${data.filename}`);
