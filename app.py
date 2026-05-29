@@ -22,8 +22,8 @@ except ImportError:
 
 app = Flask(__name__)
 
-# Detect Google Colab environment (checks if Google Drive is mounted or if Colab packages exist)
-IS_COLAB = os.path.exists('/content/drive') or 'google.colab' in sys.modules or os.environ.get('IS_COLAB') == 'true'
+# Detect Google Colab environment (checks if /content exists, if Google Drive is mounted, or if Colab env var is set)
+IS_COLAB = os.path.exists('/content') or os.path.exists('/content/drive') or 'google.colab' in sys.modules or os.environ.get('IS_COLAB') == 'true'
 
 # Use local uploads folder for all environments (no Google Drive dependency)
 UPLOAD_FOLDER = os.path.join(os.path.abspath(os.path.dirname(__file__)), 'uploads')

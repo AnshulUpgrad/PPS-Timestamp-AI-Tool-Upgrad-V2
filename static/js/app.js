@@ -56,8 +56,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
 function setupEventListeners() {
     // Selection Dialogs
-    nativeBrowseFileBtn.addEventListener('click', selectFileNatively);
-    changeFileBtn.addEventListener('click', selectFileNatively);
+    nativeBrowseFileBtn.addEventListener('click', handleBrowseClick);
+    changeFileBtn.addEventListener('click', handleBrowseClick);
 
     const webFileInput = document.getElementById('web-file-input');
     if (webFileInput) {
@@ -186,12 +186,17 @@ async function checkEnvMode() {
     }
 }
 
-async function selectFileNatively() {
+function handleBrowseClick(e) {
     if (isColabMode) {
-        // Trigger browser file input click
-        document.getElementById('web-file-input').click();
-        return;
+        // Synchronously trigger browser file input click to bypass pop-up blocks
+        const fileInput = document.getElementById('web-file-input');
+        if (fileInput) fileInput.click();
+    } else {
+        selectFileNatively();
     }
+}
+
+async function selectFileNatively() {
 
     writeLog("Requesting native OS file selection...");
     nativeBrowseFileBtn.disabled = true;
