@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AuraExtract — Key Points & Highlights</title>
+    <title>PPSimplify — Key Points & Highlights</title>
     <!-- Google Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -22,12 +22,12 @@
         <header class="app-header">
             <div class="logo">
                 <i class="fa-solid fa-bolt-lightning logo-icon"></i>
-                <h1>Aura<span>Extract</span></h1>
+                <h1>PP<span>Simplify</span></h1>
             </div>
             <p class="subtitle">Smart Speech segmentation tool powered by Gemini AI</p>
             <nav class="app-nav">
                 <a href="/" class="nav-item"><i class="fa-solid fa-chart-simple"></i> Dashboard</a>
-                <a href="/chunking" id="nav-back-to-chunker" class="nav-item"><i class="fa-solid fa-scissors"></i> Smart Chunker</a>
+                <a href="/chunking" class="nav-item"><i class="fa-solid fa-scissors"></i> Smart Chunker</a>
                 <a href="#" class="nav-item active"><i class="fa-solid fa-wand-magic-sparkles"></i> Key Points</a>
             </nav>
         </header>
@@ -90,7 +90,10 @@
                             <i class="fa-solid fa-save"></i> Save Changes
                         </button>
                         <button class="btn btn-secondary btn-sm" id="btn-export-keypoints" title="Export JSON File">
-                            <i class="fa-solid fa-file-export"></i> Export
+                            <i class="fa-solid fa-file-export"></i> Export JSON
+                        </button>
+                        <button class="btn btn-secondary btn-sm" id="btn-export-docx" title="Export DOCX File">
+                            <i class="fa-solid fa-file-word"></i> Export DOCX
                         </button>
                     </div>
                 </div>

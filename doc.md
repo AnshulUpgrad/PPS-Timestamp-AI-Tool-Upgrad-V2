@@ -1,6 +1,6 @@
-# Project Documentation: AuraExtract
+# Project Documentation: PPSimplify
 
-AuraExtract is a local developer/user utility built in Python (Flask) and Vanilla JS/CSS that extracts audio tracks from video files on the client's device and transcribes the speech locally using `faster-whisper`, yielding interactive word-level timestamps. It also contains a Smart Chunker module to segment speech transcripts into topical sessions using Gemini AI.
+PPSimplify is a local developer/user utility built in Python (Flask) and Vanilla JS/CSS that extracts audio tracks from video files on the client's device and transcribes the speech locally using `faster-whisper`, yielding interactive word-level timestamps. It also contains a Smart Chunker module to segment speech transcripts into topical sessions using Gemini AI.
 
 ---
 

@@ -30,6 +30,12 @@ app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
 # Configuration Helpers
+def load_prompt_template(filename):
+    base_dir = os.path.dirname(os.path.abspath(__file__))
+    path = os.path.join(base_dir, 'markdown_files', filename)
+    with open(path, 'r', encoding='utf-8') as f:
+        return f.read()
+
 def load_config():
     if os.path.exists(CONFIG_FILE):
         try:
@@ -389,7 +395,8 @@ def split_transcript_into_sentences(transcript_data):
                         'id': sentence_id,
                         'text': part.strip(),
                         'start': seg.get('start', 0.0),
-                        'end': seg.get('end', 0.0)
+                        'end': seg.get('end', 0.0),
+                        'words': []
                     })
                     sentence_id += 1
         return sentences
@@ -429,7 +436,8 @@ def split_transcript_into_sentences(transcript_data):
                 'id': sentence_id,
                 'text': sentence_text,
                 'start': current_words[0].get('start', 0.0),
-                'end': current_words[-1].get('end', 0.0)
+                'end': current_words[-1].get('end', 0.0),
+                'words': [{'word': cw.get('word', '').strip(), 'start': cw.get('start', 0.0), 'end': cw.get('end', 0.0)} for cw in current_words]
             })
             sentence_id += 1
             current_words = []
@@ -444,7 +452,8 @@ def split_transcript_into_sentences(transcript_data):
             'id': sentence_id,
             'text': sentence_text,
             'start': current_words[0].get('start', 0.0),
-            'end': current_words[-1].get('end', 0.0)
+            'end': current_words[-1].get('end', 0.0),
+            'words': [{'word': cw.get('word', '').strip(), 'start': cw.get('start', 0.0), 'end': cw.get('end', 0.0)} for cw in current_words]
         })
         
     return sentences
@@ -464,6 +473,8 @@ def generate_session_keypoints():
     feedback = data.get('feedback', '').strip()
     existing_heading = data.get('existing_heading', '')
     existing_subheadings = data.get('existing_subheadings', [])
+    existing_text_content = data.get('existing_text_content', '')
+    existing_visuals = data.get('existing_visuals', None)
     model_name = data.get('model', 'gemini-2.5-flash')
     
     # API key from headers, request body, or environment
@@ -475,70 +486,77 @@ def generate_session_keypoints():
     if not sentences:
         return jsonify({'error': 'No sentences provided for generating keypoints.'}), 400
         
-    # Construct the session text
+    # Construct the session text and timestamped timeline transcript representation
     session_text = " ".join([s.get('text', '') for s in sentences])
     
+    timestamped_lines = []
+    for s in sentences:
+        start_time = s.get('start', 0.0)
+        end_time = s.get('end', 0.0)
+        words = s.get('words', [])
+        if words:
+            word_str_list = []
+            for w in words:
+                w_text = w.get('word', '').strip()
+                w_start = w.get('start', 0.0)
+                word_str_list.append(f"{w_text}({w_start:.1f}s)")
+            words_str = " ".join(word_str_list)
+        else:
+            words_str = s.get('text', '')
+        timestamped_lines.append(f"[{start_time:.1f}s - {end_time:.1f}s]: {words_str}")
+        
+    timestamped_transcript = "\n".join(timestamped_lines)
+    
+    session_start = sentences[0].get('start', 0.0) if sentences else 0.0
+    session_end = sentences[-1].get('end', 0.0) if sentences else 0.0
+    
+    # Try reading the reinforced visuals guide
+    visuals_guide_content = ""
+    try:
+        visuals_guide_path = os.path.join(os.path.dirname(__file__), 'reinforced_visuals.md')
+        if os.path.exists(visuals_guide_path):
+            with open(visuals_guide_path, 'r', encoding='utf-8') as f:
+                visuals_guide_content = f.read()
+        else:
+            # Fallback to loading Visuals_guide.md if reinforced_visuals.md doesn't exist yet
+            visuals_guide_path_alt = os.path.join(os.path.dirname(__file__), 'Visuals_guide.md')
+            if os.path.exists(visuals_guide_path_alt):
+                with open(visuals_guide_path_alt, 'r', encoding='utf-8') as f:
+                    visuals_guide_content = f.read()
+    except Exception as e:
+        print(f"Error reading visuals guide: {e}")
+        
     # Design prompt
     if feedback:
-        existing_str = json.dumps({
+        existing_data = {
             "heading": existing_heading,
-            "subheadings": existing_subheadings
-        }, indent=2)
+            "subheadings": existing_subheadings,
+            "text_content": existing_text_content
+        }
+        if existing_visuals:
+            existing_data["visuals"] = existing_visuals
+            
+        existing_str = json.dumps(existing_data, indent=2)
         
-        prompt = f"""You are an expert curriculum designer, LMS architect, and instructional editor.
-Your task is to refine the heading and subheadings for a session of transcription text based on user feedback: "{feedback}".
-
-Here is the transcription text of the session:
-\"\"\"
-{session_text}
-\"\"\"
-
-Here is the existing structure:
-{existing_str}
-
-Please refine the heading and subheadings according to the feedback, adhering strictly to the guidelines below.
-
-GUIDELINES FOR HEADINGS & SUBHEADINGS:
-1. Heading: Represents "What category of learning are we inside?" (the main instructional unit title).
-   - Must be declarative and concept-centric (focused on stable academic concepts, frameworks, principles, categories, methods, theories).
-   - Do NOT make it conversational (e.g. Avoid "Now we will talk about testing", Use "Types of Psychological Tests").
-   - Do NOT focus on speaker personality, examples, or anecdotes.
-2. Subheadings: Define "What specific competencies/concepts belong to this category?"
-   - Must be competency-oriented, focusing on learner outcomes, and typically start with instructional design verbs (e.g. Explain, Differentiate, Describe, Recognize, Identify, Compare, Apply, Analyze).
-   - MUST BE EXTREMELY CONCISE: Exactly 4 or 5 words maximum per subheading. Must be a short set of words highlighting what is spoken about, NOT verbose/long sentences.
-   - Example of a bad verbose subheading: "Explain the difference between standardized psychological tests and developmental assessment methods." (12 words - too long!)
-   - Example of a good short subheading: "Differentiate Types of Psychological Tests" (5 words - concise, Bloom's Taxonomy verb, accurate!)
-   - Do NOT exceed 5 words under any circumstances.
-3. Tone: Professional, curriculum-oriented, instructional. Convert temporal spoken content into structured educational knowledge architecture.
-"""
+        prompt_tmpl = load_prompt_template('keypoints_refinement.md')
+        prompt = prompt_tmpl.format(
+            feedback=feedback,
+            session_text=session_text,
+            timestamped_transcript=timestamped_transcript,
+            existing_str=existing_str,
+            session_start=session_start,
+            session_end=session_end,
+            visuals_guide_content=visuals_guide_content
+        )
     else:
-        prompt = f"""You are an expert curriculum designer, LMS architect, and instructional editor.
-Your task is to analyze the transcription text of a session and convert it into structured educational knowledge architecture by generating exactly ONE main heading and a list of subheadings (key highlights).
-
-Here is the transcription text of the session:
-\"\"\"
-{session_text}
-\"\"\"
-
-Please generate:
-1. A single declarative, concept-centric main heading.
-2. A list of 2 to 5 competency-oriented subheadings summarizing the key concepts, competencies, or details taught.
-
-Adhere strictly to the guidelines below:
-
-GUIDELINES FOR HEADINGS & SUBHEADINGS:
-1. Heading: Represents "What category of learning are we inside?" (the main instructional unit title).
-   - Must be declarative and concept-centric (focused on stable academic concepts, frameworks, principles, categories, methods, theories).
-   - Do NOT make it conversational (e.g. Avoid "Now we will talk about testing", Use "Types of Psychological Tests").
-   - Do NOT focus on speaker personality, examples, or anecdotes.
-2. Subheadings: Define "What specific competencies/concepts belong to this category?"
-   - Must be competency-oriented, focusing on learner outcomes, and typically start with instructional design verbs (e.g. Explain, Differentiate, Describe, Recognize, Identify, Compare, Apply, Analyze).
-   - MUST BE EXTREMELY CONCISE: Exactly 4 or 5 words maximum per subheading. Must be a short set of words highlighting what is spoken about, NOT verbose/long sentences.
-   - Example of a bad verbose subheading: "Explain the difference between standardized psychological tests and developmental assessment methods." (12 words - too long!)
-   - Example of a good short subheading: "Differentiate Types of Psychological Tests" (5 words - concise, Bloom's Taxonomy verb, accurate!)
-   - Do NOT exceed 5 words under any circumstances.
-3. Tone: Professional, curriculum-oriented, instructional. Convert temporal spoken content into structured educational knowledge architecture.
-"""
+        prompt_tmpl = load_prompt_template('keypoints_initial.md')
+        prompt = prompt_tmpl.format(
+            session_text=session_text,
+            timestamped_transcript=timestamped_transcript,
+            session_start=session_start,
+            session_end=session_end,
+            visuals_guide_content=visuals_guide_content
+        )
 
     import urllib.request
     import urllib.error
@@ -566,9 +584,50 @@ GUIDELINES FOR HEADINGS & SUBHEADINGS:
                     "subheadings": {
                         "type": "ARRAY",
                         "items": {"type": "STRING"}
+                    },
+                    "text_content": {"type": "STRING"},
+                    "visuals": {
+                        "type": "OBJECT",
+                        "properties": {
+                            "template_name": {"type": "STRING"},
+                            "why_chosen": {"type": "STRING"},
+                            "graphics_required": {"type": "BOOLEAN"},
+                            "content": {
+                                "type": "OBJECT",
+                                "properties": {
+                                    "title": {"type": "STRING"},
+                                    "items": {
+                                        "type": "ARRAY",
+                                        "items": {
+                                            "type": "OBJECT",
+                                            "properties": {
+                                                "value": {"type": "STRING"},
+                                                "timestamp": {"type": "NUMBER"}
+                                            },
+                                            "required": ["value", "timestamp"]
+                                        }
+                                    },
+                                    "details": {
+                                        "type": "ARRAY",
+                                        "items": {
+                                            "type": "OBJECT",
+                                            "properties": {
+                                                "label": {"type": "STRING"},
+                                                "value": {"type": "STRING"},
+                                                "timestamp": {"type": "NUMBER"},
+                                                "extra": {"type": "STRING"}
+                                            },
+                                            "required": ["label", "value", "timestamp"]
+                                        }
+                                    }
+                                },
+                                "required": ["title"]
+                            }
+                        },
+                        "required": ["template_name", "why_chosen", "graphics_required", "content"]
                     }
                 },
-                "required": ["heading", "subheadings"]
+                "required": ["heading", "subheadings", "text_content", "visuals"]
             }
         }
     }
@@ -587,11 +646,25 @@ GUIDELINES FOR HEADINGS & SUBHEADINGS:
             return jsonify({'error': 'Empty response from Gemini API.', 'details': response_data}), 500
             
         result = json.loads(text_response.strip())
-        return jsonify({
-            'heading': result.get('heading', ''),
-            'subheadings': result.get('subheadings', [])
-        }), 200
+        visuals = result.get('visuals', {})
+        template_name = visuals.get('template_name', 'Face Only').strip()
         
+        heading = result.get('heading', '')
+        subheadings = result.get('subheadings', [])
+        text_content = result.get('text_content', '')
+        
+        if template_name == 'Face Only':
+            subheadings = []
+            text_content = ''
+            visuals['graphics_required'] = False
+            visuals['content'] = {'title': '', 'items': [], 'details': []}
+            
+        return jsonify({
+            'heading': heading,
+            'subheadings': subheadings,
+            'text_content': text_content,
+            'visuals': visuals
+        }), 200
     except urllib.error.HTTPError as e:
         error_body = e.read().decode('utf-8')
         try:
@@ -646,18 +719,11 @@ def chunk_sessions():
         sentences_str += f"[{s['id']}] {s['text']}\n"
         
     # Design prompt
-    prompt = f"""You are an AI assistant that partitions a sequence of transcription sentences into logical, coherent topical sessions (chapters).
-Each session must contain approximately 4 to 5 sentences.
-You must respect the original chronological order of the sentences. Do not reorder them, skip any, or duplicate them. Every sentence index from 0 to {len(sentences)-1} must belong to exactly one session, and the indices within and across sessions must be strictly sequential (e.g. Session 1: [0, 1, 2, 3], Session 2: [4, 5, 6, 7, 8], etc.).
-
-For each session, construct:
-1. A concise, professional title.
-2. A single-sentence summary of the content.
-3. The list of sentence indices belonging to that session.
-
-Here are the sentences to partition:
-{sentences_str}
-"""
+    prompt_tmpl = load_prompt_template('session_chunking.md')
+    prompt = prompt_tmpl.format(
+        last_index=len(sentences) - 1,
+        sentences_str=sentences_str
+    )
     
     import urllib.request
     import urllib.error
@@ -770,5 +836,355 @@ def save_chunks(filename):
     except Exception as e:
         return jsonify({'error': f"Failed to save chunks: {str(e)}"}), 500
 
+@app.route('/api/export-docx/<path:filename>', methods=['POST'])
+def export_docx(filename):
+    try:
+        import io
+        from docx import Document
+        from docx.shared import Inches, Pt, RGBColor
+        from docx.oxml import OxmlElement, parse_xml
+        from docx.oxml.ns import nsdecls, qn
+        from docx.enum.text import WD_ALIGN_PARAGRAPH
+        from flask import send_file
+    except ImportError as e:
+        return jsonify({'error': f'docx library not installed or import failed: {str(e)}'}), 500
+        
+    data = request.json or {}
+    sessions_data = data.get('sessions', [])
+    
+    if not sessions_data:
+        return jsonify({'error': 'No session data provided for export.'}), 400
+        
+    # Attempt to load original sentences to construct the transcript text
+    transcript_path = os.path.join(app.config['UPLOAD_FOLDER'], f"{filename}.json")
+    sentences_map = {}
+    if os.path.exists(transcript_path):
+        try:
+            with open(transcript_path, 'r', encoding='utf-8') as f:
+                t_data = json.load(f)
+            sentences_list = split_transcript_into_sentences(t_data)
+            sentences_map = {s['id']: s for s in sentences_list}
+        except Exception as e:
+            print(f"Error loading transcript for DOCX: {e}")
+
+    # Helper functions for styling
+    def set_cell_background(cell, fill_hex):
+        tcPr = cell._tc.get_or_add_tcPr()
+        shd = parse_xml(f'<w:shd {nsdecls("w")} w:fill="{fill_hex}"/>')
+        tcPr.append(shd)
+
+    def set_cell_margins(cell, top=140, bottom=140, left=180, right=180):
+        # top, bottom, left, right are in dxa (1 pt = 20 dxa)
+        tcPr = cell._tc.get_or_add_tcPr()
+        tcMar = OxmlElement('w:tcMar')
+        for m, val in [('top', top), ('bottom', bottom), ('left', left), ('right', right)]:
+            node = OxmlElement(f'w:{m}')
+            node.set(qn('w:w'), str(val))
+            node.set(qn('w:type'), 'dxa')
+            tcMar.append(node)
+        tcPr.append(tcMar)
+
+    def set_cell_borders(cell, color="E2E8F0", sz="4", val="single"):
+        tcPr = cell._tc.get_or_add_tcPr()
+        tcBorders = OxmlElement('w:tcBorders')
+        for border_name in ['top', 'left', 'bottom', 'right']:
+            border = OxmlElement(f'w:{border_name}')
+            border.set(qn('w:val'), val)
+            border.set(qn('w:sz'), sz)
+            border.set(qn('w:space'), '0')
+            border.set(qn('w:color'), color)
+            tcBorders.append(border)
+        tcPr.append(tcBorders)
+
+    def format_seconds(seconds):
+        mins = int(seconds // 60)
+        secs = int(seconds % 60)
+        return f"{mins:02d}:{secs:02d}"
+
+    # Create document
+    doc = Document()
+    
+    # Title
+    title = doc.add_paragraph()
+    title_run = title.add_run("Key Points & Visual Layout Export")
+    title_run.font.name = 'Calibri'
+    title_run.font.size = Pt(18)
+    title_run.font.bold = True
+    title_run.font.color.rgb = RGBColor(30, 41, 59) # Slate 800
+    title.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    
+    subtitle = doc.add_paragraph()
+    subtitle_run = subtitle.add_run(f"Source file: {filename}")
+    subtitle_run.font.name = 'Calibri'
+    subtitle_run.font.size = Pt(11)
+    subtitle_run.font.italic = True
+    subtitle_run.font.color.rgb = RGBColor(100, 116, 139) # Slate 500
+    subtitle.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    
+    doc.add_paragraph() # Spacer
+    
+    # Create Table
+    table = doc.add_table(rows=1, cols=2)
+    table.autofit = False
+    
+    # Column width setting (in inches)
+    col_widths = [Inches(2.6), Inches(3.9)]
+    
+    # Header Row
+    hdr_cells = table.rows[0].cells
+    hdr_cells[0].text = ''
+    hdr_cells[1].text = ''
+    
+    # Configure Header Cell 1
+    p1 = hdr_cells[0].paragraphs[0]
+    p1_run = p1.add_run("Plate & Transcript Content")
+    p1_run.font.name = 'Calibri'
+    p1_run.font.size = Pt(11)
+    p1_run.font.bold = True
+    p1_run.font.color.rgb = RGBColor(255, 255, 255)
+    
+    # Configure Header Cell 2
+    p2 = hdr_cells[1].paragraphs[0]
+    p2_run = p2.add_run("Curriculum Highlights & Visual Mapping")
+    p2_run.font.name = 'Calibri'
+    p2_run.font.size = Pt(11)
+    p2_run.font.bold = True
+    p2_run.font.color.rgb = RGBColor(255, 255, 255)
+    
+    for i, cell in enumerate(hdr_cells):
+        set_cell_background(cell, "1E293B") # Slate 800
+        set_cell_margins(cell, top=180, bottom=180, left=180, right=180)
+        set_cell_borders(cell, color="475569") # Slate 600
+        cell.width = col_widths[i]
+        
+    # Populate Rows
+    for idx, session in enumerate(sessions_data):
+        row = table.add_row()
+        row_cells = row.cells
+        
+        # Widths
+        row_cells[0].width = col_widths[0]
+        row_cells[1].width = col_widths[1]
+        
+        # Margins & borders
+        for cell in row_cells:
+            set_cell_margins(cell, top=140, bottom=140, left=180, right=180)
+            set_cell_borders(cell, color="CBD5E1") # Slate 300 (light gray)
+            
+        # Left Cell Shading (very light blue/gray for Session Column)
+        set_cell_background(row_cells[0], "F8FAFC") # Slate 50
+        
+        # Left Cell Content
+        cell_left = row_cells[0]
+        p_session = cell_left.paragraphs[0]
+        p_session.paragraph_format.space_after = Pt(4)
+        run_s_title = p_session.add_run(f"Plate {idx + 1}")
+        run_s_title.font.name = 'Calibri'
+        run_s_title.font.size = Pt(11)
+        run_s_title.font.bold = True
+        run_s_title.font.color.rgb = RGBColor(30, 41, 59) # Slate 800
+        
+        # Time duration
+        session_start = 0.0
+        session_end = 0.0
+        indices = session.get('sentence_indices', [])
+        if indices and sentences_map:
+            first_sent = sentences_map.get(indices[0])
+            last_sent = sentences_map.get(indices[-1])
+            if first_sent:
+                session_start = first_sent.get('start', 0.0)
+            if last_sent:
+                session_end = last_sent.get('end', 0.0)
+        duration_str = f"Time: {format_seconds(session_start)} - {format_seconds(session_end)}"
+        
+        p_time = cell_left.add_paragraph()
+        p_time.paragraph_format.space_after = Pt(8)
+        run_time = p_time.add_run(duration_str)
+        run_time.font.name = 'Calibri'
+        run_time.font.size = Pt(9.5)
+        run_time.font.italic = True
+        run_time.font.color.rgb = RGBColor(100, 116, 139) # Slate 500
+        
+        # Transcript Content
+        session_sentences = []
+        for sid in indices:
+            if sid in sentences_map:
+                session_sentences.append(sentences_map[sid].get('text', '').strip())
+        session_text = " ".join(session_sentences)
+        
+        p_trans_hdr = cell_left.add_paragraph()
+        p_trans_hdr.paragraph_format.space_after = Pt(2)
+        run_trans_hdr = p_trans_hdr.add_run("Transcript:")
+        run_trans_hdr.font.name = 'Calibri'
+        run_trans_hdr.font.size = Pt(9)
+        run_trans_hdr.font.bold = True
+        run_trans_hdr.font.color.rgb = RGBColor(71, 85, 105) # Slate 600
+        
+        p_trans_body = cell_left.add_paragraph()
+        p_trans_body.paragraph_format.line_spacing = 1.15
+        p_trans_body.paragraph_format.space_after = Pt(0)
+        run_trans_body = p_trans_body.add_run(session_text or "No transcript text available.")
+        run_trans_body.font.name = 'Calibri'
+        run_trans_body.font.size = Pt(9.5)
+        run_trans_body.font.color.rgb = RGBColor(51, 65, 85) # Slate 700
+        
+        # Right Cell Content
+        cell_right = row_cells[1]
+        
+        # Visual Template
+        visuals = session.get('visuals', {})
+        template_name = visuals.get('template_name', 'Face Only')
+        why_chosen = visuals.get('why_chosen', '')
+        graphics_req = visuals.get('graphics_required', False)
+        v_content = visuals.get('content', {})
+        v_title = v_content.get('title', '')
+        v_items = v_content.get('items', [])
+        v_details = v_content.get('details', [])
+        
+        p_temp = cell_right.paragraphs[0]
+        p_temp.paragraph_format.space_before = Pt(0)
+        p_temp.paragraph_format.space_after = Pt(2)
+        run_temp_lbl = p_temp.add_run("Visual Layout Suggestion: ")
+        run_temp_lbl.font.name = 'Calibri'
+        run_temp_lbl.font.size = Pt(9.5)
+        run_temp_lbl.font.bold = True
+        run_temp_lbl.font.color.rgb = RGBColor(71, 85, 105) # Slate 600
+        
+        run_temp_val = p_temp.add_run(template_name)
+        run_temp_val.font.name = 'Calibri'
+        run_temp_val.font.size = Pt(10)
+        run_temp_val.font.bold = True
+        run_temp_val.font.color.rgb = RGBColor(13, 148, 136) # Teal 600
+        
+        if graphics_req:
+            run_req = p_temp.add_run(" (Graphics Required)")
+            run_req.font.name = 'Calibri'
+            run_req.font.size = Pt(9)
+            run_req.font.italic = True
+            run_req.font.color.rgb = RGBColor(220, 38, 38) # Red 600
+            
+        if why_chosen:
+            p_why = cell_right.add_paragraph()
+            p_why.paragraph_format.space_after = Pt(6)
+            run_why_lbl = p_why.add_run("Why Chosen: ")
+            run_why_lbl.font.name = 'Calibri'
+            run_why_lbl.font.size = Pt(9)
+            run_why_lbl.font.bold = True
+            run_why_lbl.font.color.rgb = RGBColor(100, 116, 139) # Slate 500
+            
+            run_why_val = p_why.add_run(why_chosen)
+            run_why_val.font.name = 'Calibri'
+            run_why_val.font.size = Pt(9)
+            run_why_val.font.italic = True
+            run_why_val.font.color.rgb = RGBColor(71, 85, 105) # Slate 600
+            
+        # Visual Content details (only if template is not Face Only)
+        if template_name != "Face Only" and (v_title or v_items or v_details):
+            p_vc_hdr = cell_right.add_paragraph()
+            p_vc_hdr.paragraph_format.space_before = Pt(6)
+            p_vc_hdr.paragraph_format.space_after = Pt(2)
+            run_vc_hdr = p_vc_hdr.add_run("Visual Content Details:")
+            run_vc_hdr.font.name = 'Calibri'
+            run_vc_hdr.font.size = Pt(9.5)
+            run_vc_hdr.font.bold = True
+            run_vc_hdr.font.color.rgb = RGBColor(71, 85, 105) # Slate 600
+            
+            if v_title:
+                p_v_title = cell_right.add_paragraph()
+                p_v_title.paragraph_format.space_after = Pt(3)
+                run_v_title_lbl = p_v_title.add_run("  Heading: ")
+                run_v_title_lbl.font.name = 'Calibri'
+                run_v_title_lbl.font.size = Pt(9)
+                run_v_title_lbl.font.bold = True
+                run_v_title_lbl.font.color.rgb = RGBColor(0, 0, 0)
+                
+                run_v_title_val = p_v_title.add_run(v_title)
+                run_v_title_val.font.name = 'Calibri'
+                run_v_title_val.font.size = Pt(9.5)
+                run_v_title_val.font.bold = True
+                run_v_title_val.font.color.rgb = RGBColor(0, 0, 0)
+                
+            if v_items:
+                for item in v_items:
+                    p_v_item = cell_right.add_paragraph(style='List Bullet 2')
+                    p_v_item.paragraph_format.space_after = Pt(2)
+                    
+                    item_val = item.get('value', '')
+                    item_ts = item.get('timestamp', 0.0)
+                    
+                    run_ts = p_v_item.add_run(f"[{format_seconds(item_ts)}] ")
+                    run_ts.font.name = 'Calibri'
+                    run_ts.font.size = Pt(8.5)
+                    run_ts.font.bold = True
+                    run_ts.font.color.rgb = RGBColor(0, 0, 0)
+                    
+                    run_val = p_v_item.add_run(item_val)
+                    run_val.font.name = 'Calibri'
+                    run_val.font.size = Pt(9)
+                    run_val.font.color.rgb = RGBColor(0, 0, 0)
+                    
+            if v_details:
+                for detail in v_details:
+                    p_v_detail = cell_right.add_paragraph(style='List Bullet 2')
+                    p_v_detail.paragraph_format.space_after = Pt(2)
+                    
+                    d_label = detail.get('label', '')
+                    d_val = detail.get('value', '')
+                    d_ts = detail.get('timestamp', 0.0)
+                    
+                    run_ts = p_v_detail.add_run(f"[{format_seconds(d_ts)}] ")
+                    run_ts.font.name = 'Calibri'
+                    run_ts.font.size = Pt(8.5)
+                    run_ts.font.bold = True
+                    run_ts.font.color.rgb = RGBColor(0, 0, 0)
+                    
+                    run_lbl = p_v_detail.add_run(f"{d_label}: ")
+                    run_lbl.font.name = 'Calibri'
+                    run_lbl.font.size = Pt(9)
+                    run_lbl.font.bold = True
+                    run_lbl.font.color.rgb = RGBColor(0, 0, 0)
+                    
+                    run_val = p_v_detail.add_run(d_val)
+                    run_val.font.name = 'Calibri'
+                    run_val.font.size = Pt(9)
+                    run_val.font.color.rgb = RGBColor(0, 0, 0)
+                    
+        # Additional Text Content
+        text_content = session.get('text_content', '')
+        if text_content:
+            p_add_hdr = cell_right.add_paragraph()
+            p_add_hdr.paragraph_format.space_before = Pt(8)
+            p_add_hdr.paragraph_format.space_after = Pt(2)
+            run_add_hdr = p_add_hdr.add_run("Additional Content / Notes:")
+            run_add_hdr.font.name = 'Calibri'
+            run_add_hdr.font.size = Pt(9.5)
+            run_add_hdr.font.bold = True
+            run_add_hdr.font.color.rgb = RGBColor(71, 85, 105) # Slate 600
+            
+            p_add_body = cell_right.add_paragraph()
+            p_add_body.paragraph_format.line_spacing = 1.15
+            p_add_body.paragraph_format.space_after = Pt(0)
+            run_add_body = p_add_body.add_run(text_content)
+            run_add_body.font.name = 'Calibri'
+            run_add_body.font.size = Pt(9)
+            run_add_body.font.color.rgb = RGBColor(51, 65, 85) # Slate 700
+            
+    # Save to BytesIO
+    file_stream = io.BytesIO()
+    doc.save(file_stream)
+    file_stream.seek(0)
+    
+    # Return as download attachment
+    base_name, _ = os.path.splitext(os.path.basename(filename))
+    export_filename = f"{base_name}_curriculum_export.docx"
+    
+    return send_file(
+        file_stream,
+        mimetype="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        as_attachment=True,
+        download_name=export_filename
+    )
+
 if __name__ == '__main__':
     app.run(debug=True, port=5000)
+

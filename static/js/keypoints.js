@@ -15,6 +15,7 @@ const readOnlySessionsWrapper = document.getElementById('read-only-sessions-wrap
 const keypointsListWrapper = document.getElementById('keypoints-list-wrapper');
 const btnSaveKeypoints = document.getElementById('btn-save-keypoints');
 const btnExportKeypoints = document.getElementById('btn-export-keypoints');
+const btnExportDocx = document.getElementById('btn-export-docx');
 const sessionsCountBadge = document.getElementById('sessions-count-badge');
 
 // Initialize
@@ -78,13 +79,63 @@ async function loadWorkspaceData() {
 
         sessionsCountBadge.textContent = `${sessions.length} Chunks`;
         
-        // Ensure every session has single heading and subheadings fields
+        // Ensure every session has single heading, subheadings, text_content, and visuals fields
         sessions.forEach(s => {
             if (s.heading === undefined) {
                 s.heading = '';
             }
             if (s.subheadings === undefined) {
                 s.subheadings = [];
+            }
+            if (s.text_content === undefined) {
+                s.text_content = '';
+            }
+            if (s.visuals === undefined) {
+                s.visuals = {
+                    template_name: 'Face Only',
+                    why_chosen: '',
+                    graphics_required: false,
+                    content: {
+                        title: '',
+                        items: [],
+                        details: []
+                    }
+                };
+            }
+            
+            // Normalize visuals items/details schema
+            if (s.visuals && s.visuals.content) {
+                const content = s.visuals.content;
+                if (content.items) {
+                    content.items = content.items.map(item => {
+                        if (typeof item === 'string') {
+                            return { value: item, timestamp: 0.0 };
+                        } else if (item && typeof item === 'object') {
+                            return {
+                                value: item.value || '',
+                                timestamp: item.timestamp !== undefined ? Number(item.timestamp) : 0.0
+                            };
+                        }
+                        return { value: '', timestamp: 0.0 };
+                    });
+                } else {
+                    content.items = [];
+                }
+                if (content.details) {
+                    content.details = content.details.map(d => {
+                        if (d && typeof d === 'object') {
+                            return {
+                                label: d.label || '',
+                                value: d.value || '',
+                                timestamp: d.timestamp !== undefined ? Number(d.timestamp) : 0.0,
+                                extra: d.extra || ''
+                            };
+                        }
+                        return { label: '', value: '', timestamp: 0.0 };
+                    });
+                } else {
+                    content.details = [];
+                }
             }
         });
 
@@ -125,6 +176,9 @@ function setupEventListeners() {
 
     // Export Chunks JSON
     btnExportKeypoints.addEventListener('click', exportKeypointsJSON);
+
+    // Export Chunks DOCX
+    btnExportDocx.addEventListener('click', exportKeypointsDocx);
 
     // Warn of unsaved changes
     window.addEventListener('beforeunload', (e) => {
@@ -239,18 +293,91 @@ function renderKeypointsList() {
                     </div>
                 </div>
                 
-                <!-- Subheadings input group -->
-                <div class="session-input-group">
-                    <label class="session-input-label">Subheadings (Highlights & Competencies)</label>
-                    <div class="subheadings-container" id="subheadings-container-${index}" style="display: flex; flex-direction: column; gap: 8px; margin-left: 15px; margin-top: 5px;">
-                        <!-- Rendered subheadings go here -->
+                <!-- Subheadings wrapper block -->
+                <div id="subheadings-block-${index}">
+                    <!-- Subheadings input group -->
+                    <div class="session-input-group" style="margin-bottom: 15px;">
+                        <label class="session-input-label">Subheadings (Highlights & Competencies)</label>
+                        <div class="subheadings-container" id="subheadings-container-${index}" style="display: flex; flex-direction: column; gap: 8px; margin-left: 15px; margin-top: 5px;">
+                            <!-- Rendered subheadings go here -->
+                        </div>
+                    </div>
+
+                    <div style="margin-top: 8px; margin-left: 15px; margin-bottom: 15px;">
+                        <button class="btn btn-secondary btn-sm btn-add-sub" data-session="${index}" style="padding: 4px 10px; font-size: 0.72rem; background: transparent; border: 1px dashed rgba(255,255,255,0.15);">
+                            <i class="fa-solid fa-plus" style="font-size: 0.65rem; margin-right: 3px;"></i> Add Subheading
+                        </button>
                     </div>
                 </div>
 
-                <div style="margin-top: 8px; margin-left: 15px;">
-                    <button class="btn btn-secondary btn-sm btn-add-sub" data-session="${index}" style="padding: 4px 10px; font-size: 0.72rem; background: transparent; border: 1px dashed rgba(255,255,255,0.15);">
-                        <i class="fa-solid fa-plus" style="font-size: 0.65rem; margin-right: 3px;"></i> Add Subheading
-                    </button>
+                <!-- Additional Text Content Wrapper block -->
+                <div id="text-content-block-${index}">
+                    <!-- Additional Text Content input group -->
+                    <div class="session-input-group" style="margin-bottom: 15px;">
+                        <label class="session-input-label">Additional Content / Notes</label>
+                        <textarea class="refinement-input session-summary-input" id="text-content-input-${index}" placeholder="Optional extra slide text content, context notes, or narrative summaries..." style="width: 100%; font-size: 0.82rem; padding: 10px 14px; border-radius: 10px; min-height: 60px; outline: none; background: rgba(255, 255, 255, 0.02); border: 1px solid var(--border-color); color: var(--color-text-primary); font-family: var(--font-body); resize: vertical;">${escapeHtml(session.text_content || '')}</textarea>
+                    </div>
+                </div>
+
+                <!-- Visual Template Section -->
+                <div style="margin-top: 20px; border-top: 1px dashed rgba(255, 255, 255, 0.08); padding-top: 15px;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; cursor: pointer;" class="visuals-toggle-header" data-session="${index}" id="visuals-toggle-header-${index}">
+                        <label class="session-input-label" style="cursor: pointer; margin: 0;"><i class="fa-solid fa-image" style="margin-right: 5px; color: var(--accent-secondary);"></i> Visual Layout: <span id="visual-template-badge-${index}" class="badge badge-info" style="margin-left: 5px; text-transform: none; font-size: 0.75rem; background: rgba(99, 102, 241, 0.2); border-color: rgba(99, 102, 241, 0.4);">${escapeHtml(session.visuals?.template_name || 'Face Only')}</span></label>
+                        <span style="color: var(--color-text-muted); font-size: 0.8rem;" id="visuals-toggle-icon-${index}"><i class="fa-solid fa-chevron-down"></i></span>
+                    </div>
+                    
+                    <div class="visuals-details-container hidden" id="visuals-details-${index}" style="margin-top: 12px; display: flex; flex-direction: column; gap: 12px; padding-left: 15px; border-left: 2px solid rgba(99, 102, 241, 0.2);">
+                        <div style="display: flex; gap: 15px; align-items: center; justify-content: space-between;">
+                            <div style="flex: 1;">
+                                <label class="session-input-label" style="font-size: 0.65rem;">Chosen Template</label>
+                                <select class="premium-select visual-template-select" id="template-select-${index}" style="padding: 6px 12px; font-size: 0.8rem; margin-top: 4px; border-radius: 8px; height: auto;">
+                                    <option value="Face Only">Face Only</option>
+                                    <option value="Type Template 1">Type Template 1</option>
+                                    <option value="Type Template 2">Type Template 2</option>
+                                    <option value="Process Template 1">Process Template 1</option>
+                                    <option value="Process Template 2">Process Template 2</option>
+                                    <option value="Process Template 3">Process Template 3</option>
+                                    <option value="Differentiation Template 1">Differentiation Template 1</option>
+                                    <option value="Differentiation Template 2">Differentiation Template 2 (Image Supported)</option>
+                                    <option value="Timeline Template 1">Timeline Template 1</option>
+                                    <option value="Timeline Template 2">Timeline Template 2</option>
+                                    <option value="Hierarchy Template 1">Hierarchy Template 1</option>
+                                    <option value="Graph Template 1">Graph Template 1 (Line Graph)</option>
+                                    <option value="Graph Template 2">Graph Template 2 (Bar Plot)</option>
+                                    <option value="Graph Template 3">Graph Template 3 (Pie Chart)</option>
+                                </select>
+                            </div>
+                            <div style="margin-top: 12px; display: flex; align-items: center; gap: 6px;">
+                                <input type="checkbox" id="graphics-required-check-${index}" style="accent-color: var(--accent-primary);" ${(session.visuals && session.visuals.graphics_required) ? 'checked' : ''}>
+                                <label for="graphics-required-check-${index}" style="font-size: 0.8rem; color: var(--color-text-secondary); cursor: pointer; margin: 0; user-select: none;">Graphics Required</label>
+                            </div>
+                        </div>
+                        
+                        <div>
+                            <label class="session-input-label" style="font-size: 0.65rem;">Why Chosen</label>
+                            <input type="text" class="refinement-input path-input" id="why-chosen-input-${index}" value="${escapeHtml(session.visuals?.why_chosen || '')}" placeholder="Citing rules, density, or content..." style="width: 100%; font-size: 0.8rem; padding: 6px 10px; margin-top: 4px; border-radius: 8px;">
+                        </div>
+                        
+                        <div id="visual-content-editor-block-${index}">
+                            <label class="session-input-label" style="font-size: 0.65rem;">Visual Content Detail</label>
+                            <div style="display: flex; flex-direction: column; gap: 8px; margin-top: 4px;">
+                                <input type="text" class="refinement-input path-input" id="template-title-input-${index}" value="${escapeHtml(session.visuals?.content?.title || '')}" placeholder="Slide/Visual Title..." style="font-size: 0.8rem; padding: 6px 10px; font-weight: 600; border-radius: 8px; width: 100%;">
+                                
+                                <div id="template-items-container-${index}" style="display: flex; flex-direction: column; gap: 6px;">
+                                    <!-- Dynamic items or details -->
+                                </div>
+                                
+                                <div style="display: flex; gap: 8px;">
+                                    <button class="btn btn-secondary btn-sm btn-add-template-item" data-session="${index}" style="padding: 4px 8px; font-size: 0.7rem; background: transparent; border: 1px dashed rgba(255,255,255,0.15);">
+                                        <i class="fa-solid fa-plus" style="font-size: 0.65rem; margin-right: 3px;"></i> Add List Item
+                                    </button>
+                                    <button class="btn btn-secondary btn-sm btn-add-template-detail" data-session="${index}" style="padding: 4px 8px; font-size: 0.7rem; background: transparent; border: 1px dashed rgba(255,255,255,0.15);">
+                                        <i class="fa-solid fa-plus" style="font-size: 0.65rem; margin-right: 3px;"></i> Add Detail (Key-Value)
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
                 </div>
                 
                 <!-- Refinement Block -->
@@ -273,6 +400,13 @@ function renderKeypointsList() {
             markDirty();
         });
 
+        // Bind additional text content textarea directly to update state on typing
+        const textContentInput = card.querySelector(`#text-content-input-${index}`);
+        textContentInput.addEventListener('input', (e) => {
+            session.text_content = e.target.value;
+            markDirty();
+        });
+
         // Render subheadings list
         const subContainer = card.querySelector(`#subheadings-container-${index}`);
         renderSessionSubheadings(session, index, subContainer);
@@ -282,6 +416,117 @@ function renderKeypointsList() {
             session.subheadings.push('');
             markDirty();
             renderSessionSubheadings(session, index, subContainer);
+        });
+
+        // Bind visuals details toggle
+        const toggleHeader = card.querySelector(`#visuals-toggle-header-${index}`);
+        const detailsContainer = card.querySelector(`#visuals-details-${index}`);
+        const toggleIcon = card.querySelector(`#visuals-toggle-icon-${index}`);
+        toggleHeader.addEventListener('click', () => {
+            detailsContainer.classList.toggle('hidden');
+            const isHidden = detailsContainer.classList.contains('hidden');
+            toggleIcon.innerHTML = isHidden ? '<i class="fa-solid fa-chevron-down"></i>' : '<i class="fa-solid fa-chevron-up"></i>';
+        });
+
+        // Bind visuals template select dropdown
+        const templateSelect = card.querySelector(`#template-select-${index}`);
+        templateSelect.value = session.visuals?.template_name || 'Face Only';
+        templateSelect.addEventListener('change', (e) => {
+            if (!session.visuals) {
+                session.visuals = { template_name: 'Face Only', why_chosen: '', graphics_required: false, content: { title: '', items: [], details: [] } };
+            }
+            session.visuals.template_name = e.target.value;
+            card.querySelector(`#visual-template-badge-${index}`).textContent = e.target.value;
+            
+            const graphicsCheck = card.querySelector(`#graphics-required-check-${index}`);
+            if (e.target.value === 'Face Only') {
+                session.visuals.graphics_required = false;
+                graphicsCheck.checked = false;
+            } else {
+                session.visuals.graphics_required = true;
+                graphicsCheck.checked = true;
+            }
+            
+            toggleSlideTextVisibility(index, e.target.value);
+            markDirty();
+        });
+
+        // Bind graphics required checkbox
+        const graphicsCheck = card.querySelector(`#graphics-required-check-${index}`);
+        graphicsCheck.addEventListener('change', (e) => {
+            if (!session.visuals) {
+                session.visuals = { template_name: 'Face Only', why_chosen: '', graphics_required: false, content: { title: '', items: [], details: [] } };
+            }
+            session.visuals.graphics_required = e.target.checked;
+            markDirty();
+        });
+
+        // Bind why chosen input
+        const whyChosenInput = card.querySelector(`#why-chosen-input-${index}`);
+        whyChosenInput.addEventListener('input', (e) => {
+            if (!session.visuals) {
+                session.visuals = { template_name: 'Face Only', why_chosen: '', graphics_required: false, content: { title: '', items: [], details: [] } };
+            }
+            session.visuals.why_chosen = e.target.value;
+            markDirty();
+        });
+
+        // Bind template title input
+        const templateTitleInput = card.querySelector(`#template-title-input-${index}`);
+        templateTitleInput.addEventListener('input', (e) => {
+            if (!session.visuals) {
+                session.visuals = { template_name: 'Face Only', why_chosen: '', graphics_required: false, content: { title: '', items: [], details: [] } };
+            }
+            if (!session.visuals.content) {
+                session.visuals.content = { title: '', items: [], details: [] };
+            }
+            session.visuals.content.title = e.target.value;
+            markDirty();
+        });
+
+        // Hide visual content block if Face Only
+        const contentBlock = card.querySelector(`#visual-content-editor-block-${index}`);
+        if (session.visuals?.template_name === 'Face Only') {
+            contentBlock.classList.add('hidden');
+        }
+
+        // Render visual content details / items list
+        const itemsContainer = card.querySelector(`#template-items-container-${index}`);
+        renderSessionVisualContent(session, index, itemsContainer);
+
+        // Hide/Show layout text blocks based on initial visual template choice
+        toggleSlideTextVisibility(index, session.visuals?.template_name || 'Face Only');
+
+        // Bind add template list item button
+        card.querySelector('.btn-add-template-item').addEventListener('click', () => {
+            if (!session.visuals) {
+                session.visuals = { template_name: 'Face Only', why_chosen: '', graphics_required: false, content: { title: '', items: [], details: [] } };
+            }
+            if (!session.visuals.content) {
+                session.visuals.content = { title: '', items: [], details: [] };
+            }
+            if (!session.visuals.content.items) {
+                session.visuals.content.items = [];
+            }
+            session.visuals.content.items.push({ value: '', timestamp: 0.0 });
+            markDirty();
+            renderSessionVisualContent(session, index, itemsContainer);
+        });
+
+        // Bind add template key-value detail button
+        card.querySelector('.btn-add-template-detail').addEventListener('click', () => {
+            if (!session.visuals) {
+                session.visuals = { template_name: 'Face Only', why_chosen: '', graphics_required: false, content: { title: '', items: [], details: [] } };
+            }
+            if (!session.visuals.content) {
+                session.visuals.content = { title: '', items: [], details: [] };
+            }
+            if (!session.visuals.content.details) {
+                session.visuals.content.details = [];
+            }
+            session.visuals.content.details.push({ label: '', value: '', timestamp: 0.0 });
+            markDirty();
+            renderSessionVisualContent(session, index, itemsContainer);
         });
 
         // Bind Per-Session Generate / Refine Button
@@ -333,6 +578,133 @@ function renderSessionSubheadings(session, sessionIdx, container) {
         });
 
         container.appendChild(subEl);
+    });
+}
+
+// Render dynamic visual layout items (list values or label-value fields)
+function renderSessionVisualContent(session, idx, container) {
+    container.innerHTML = '';
+    
+    if (!session.visuals) {
+        session.visuals = {
+            template_name: 'Face Only',
+            why_chosen: '',
+            graphics_required: false,
+            content: { title: '', items: [], details: [] }
+        };
+    }
+    
+    const content = session.visuals.content || { title: '', items: [], details: [] };
+    if (!content.items) content.items = [];
+    if (!content.details) content.details = [];
+    
+    if (content.items.length === 0 && content.details.length === 0) {
+        container.innerHTML = '<div style="font-size: 0.78rem; color: var(--color-text-muted); font-style: italic; padding: 4px 0;">No slide items yet. Add one below if needed.</div>';
+        return;
+    }
+    
+    // Render items
+    content.items.forEach((item, itemIdx) => {
+        let itemObj = item;
+        if (typeof item === 'string') {
+            itemObj = { value: item, timestamp: 0.0 };
+            content.items[itemIdx] = itemObj;
+        }
+        
+        const row = document.createElement('div');
+        row.className = 'template-item-row';
+        row.style.marginBottom = '6px';
+        row.innerHTML = `
+            <span style="font-size: 0.7rem; color: var(--accent-primary);"><i class="fa-solid fa-square-minus"></i></span>
+            <input type="text" class="template-item-value" value="${escapeHtml(itemObj.value || '')}" placeholder="Item list value..." style="flex: 1; font-size: 0.8rem; background: rgba(255,255,255,0.02); border: 1px solid var(--border-color); padding: 5px 8px; border-radius: 6px; color: white;">
+            <div class="template-item-time-container" title="Slide Entry Timestamp (Min:Sec)">
+                <input type="number" min="0" class="template-item-time-min" value="${Math.floor((itemObj.timestamp || 0.0) / 60)}" placeholder="Min" title="Minutes">
+                <span style="color: var(--color-text-muted); font-size: 0.8rem;">:</span>
+                <input type="number" min="0" max="59.9" step="0.1" class="template-item-time-sec" value="${((itemObj.timestamp || 0.0) % 60).toFixed(1)}" placeholder="Sec" title="Seconds">
+            </div>
+            <button class="btn-icon btn-delete-item" title="Delete Item" style="width: 20px; height: 20px; color: var(--color-text-muted); background: transparent; border: none; cursor: pointer;">
+                <i class="fa-solid fa-xmark" style="font-size: 0.72rem;"></i>
+            </button>
+        `;
+        
+        const input = row.querySelector('.template-item-value');
+        input.addEventListener('input', (e) => {
+            itemObj.value = e.target.value;
+            markDirty();
+        });
+        
+        const minInput = row.querySelector('.template-item-time-min');
+        const secInput = row.querySelector('.template-item-time-sec');
+        const updateTime = () => {
+            const mins = parseInt(minInput.value) || 0;
+            const secs = parseFloat(secInput.value) || 0.0;
+            itemObj.timestamp = mins * 60 + secs;
+            markDirty();
+        };
+        minInput.addEventListener('input', updateTime);
+        secInput.addEventListener('input', updateTime);
+        
+        row.querySelector('.btn-delete-item').addEventListener('click', () => {
+            content.items.splice(itemIdx, 1);
+            markDirty();
+            renderSessionVisualContent(session, idx, container);
+        });
+        
+        container.appendChild(row);
+    });
+    
+    // Render details
+    content.details.forEach((detail, detailIdx) => {
+        if (detail.timestamp === undefined) {
+            detail.timestamp = 0.0;
+        }
+        
+        const row = document.createElement('div');
+        row.className = 'template-item-row';
+        row.style.marginBottom = '6px';
+        row.innerHTML = `
+            <input type="text" class="template-item-label" value="${escapeHtml(detail.label || '')}" placeholder="Label/Step/Year..." style="width: 120px; flex-shrink: 0; font-size: 0.8rem; background: rgba(255,255,255,0.03); border: 1px solid var(--border-color); padding: 5px 8px; border-radius: 6px; color: white;">
+            <input type="text" class="template-item-value" value="${escapeHtml(detail.value || '')}" placeholder="Description/Val..." style="flex: 1; font-size: 0.8rem; background: rgba(255,255,255,0.02); border: 1px solid var(--border-color); padding: 5px 8px; border-radius: 6px; color: white;">
+            <div class="template-item-time-container" title="Slide Entry Timestamp (Min:Sec)">
+                <input type="number" min="0" class="template-item-time-min" value="${Math.floor((detail.timestamp || 0.0) / 60)}" placeholder="Min" title="Minutes">
+                <span style="color: var(--color-text-muted); font-size: 0.8rem;">:</span>
+                <input type="number" min="0" max="59.9" step="0.1" class="template-item-time-sec" value="${((detail.timestamp || 0.0) % 60).toFixed(1)}" placeholder="Sec" title="Seconds">
+            </div>
+            <button class="btn-icon btn-delete-detail" title="Delete Detail" style="width: 20px; height: 20px; color: var(--color-text-muted); background: transparent; border: none; cursor: pointer;">
+                <i class="fa-solid fa-xmark" style="font-size: 0.72rem;"></i>
+            </button>
+        `;
+        
+        const labelInput = row.querySelector('.template-item-label');
+        labelInput.addEventListener('input', (e) => {
+            detail.label = e.target.value;
+            markDirty();
+        });
+        
+        const valInput = row.querySelector('.template-item-value');
+        valInput.addEventListener('input', (e) => {
+            detail.value = e.target.value;
+            markDirty();
+        });
+        
+        const minInput = row.querySelector('.template-item-time-min');
+        const secInput = row.querySelector('.template-item-time-sec');
+        const updateTime = () => {
+            const mins = parseInt(minInput.value) || 0;
+            const secs = parseFloat(secInput.value) || 0.0;
+            detail.timestamp = mins * 60 + secs;
+            markDirty();
+        };
+        minInput.addEventListener('input', updateTime);
+        secInput.addEventListener('input', updateTime);
+        
+        row.querySelector('.btn-delete-detail').addEventListener('click', () => {
+            content.details.splice(detailIdx, 1);
+            markDirty();
+            renderSessionVisualContent(session, idx, container);
+        });
+        
+        container.appendChild(row);
     });
 }
 
@@ -408,7 +780,7 @@ async function executeSessionGeneration(sessionIdx, feedback = '') {
     // Collect sentence details mapping to this session
     const sessionSentences = session.sentence_indices.map(id => {
         const s = sentences.find(sent => sent.id === id);
-        return { id: s.id, text: s.text };
+        return { id: s.id, text: s.text, start: s.start, end: s.end, words: s.words || [] };
     });
 
     const keyOverride = apiKeyInput.value.trim();
@@ -433,6 +805,8 @@ async function executeSessionGeneration(sessionIdx, feedback = '') {
         if (feedback) {
             payload.existing_heading = session.heading;
             payload.existing_subheadings = session.subheadings;
+            payload.existing_text_content = session.text_content;
+            payload.existing_visuals = session.visuals;
         }
 
         const resp = await fetch('/api/generate-session-keypoints', {
@@ -449,9 +823,51 @@ async function executeSessionGeneration(sessionIdx, feedback = '') {
             throw new Error(data.error || 'Gemini API call failed');
         }
 
-        // Set returned heading and subheadings
+        // Set returned heading, subheadings, text_content, and visuals
         session.heading = data.heading || '';
         session.subheadings = data.subheadings || [];
+        session.text_content = data.text_content || '';
+        session.visuals = data.visuals || {
+            template_name: 'Face Only',
+            why_chosen: 'No visual template could be determined',
+            graphics_required: false,
+            content: { title: '', items: [], details: [] }
+        };
+        
+        // Normalize visuals items/details schema
+        if (session.visuals && session.visuals.content) {
+            const content = session.visuals.content;
+            if (content.items) {
+                content.items = content.items.map(item => {
+                    if (typeof item === 'string') {
+                        return { value: item, timestamp: 0.0 };
+                    } else if (item && typeof item === 'object') {
+                        return {
+                            value: item.value || '',
+                            timestamp: item.timestamp !== undefined ? Number(item.timestamp) : 0.0
+                        };
+                    }
+                    return { value: '', timestamp: 0.0 };
+                });
+            } else {
+                content.items = [];
+            }
+            if (content.details) {
+                content.details = content.details.map(d => {
+                    if (d && typeof d === 'object') {
+                        return {
+                            label: d.label || '',
+                            value: d.value || '',
+                            timestamp: d.timestamp !== undefined ? Number(d.timestamp) : 0.0,
+                            extra: d.extra || ''
+                        };
+                    }
+                    return { label: '', value: '', timestamp: 0.0 };
+                });
+            } else {
+                content.details = [];
+            }
+        }
         
         // Update input field and re-render subheadings list
         const headingInput = cardEl.querySelector(`#heading-input-${sessionIdx}`);
@@ -459,8 +875,37 @@ async function executeSessionGeneration(sessionIdx, feedback = '') {
             headingInput.value = session.heading;
         }
         
+        const textContentInput = cardEl.querySelector(`#text-content-input-${sessionIdx}`);
+        if (textContentInput) {
+            textContentInput.value = session.text_content;
+        }
+        
         const subContainer = cardEl.querySelector(`#subheadings-container-${sessionIdx}`);
         renderSessionSubheadings(session, sessionIdx, subContainer);
+
+        // Update visuals components
+        const badge = cardEl.querySelector(`#visual-template-badge-${sessionIdx}`);
+        if (badge) badge.textContent = session.visuals.template_name;
+
+        const templateSelect = cardEl.querySelector(`#template-select-${sessionIdx}`);
+        if (templateSelect) templateSelect.value = session.visuals.template_name;
+
+        const graphicsCheck = cardEl.querySelector(`#graphics-required-check-${sessionIdx}`);
+        if (graphicsCheck) graphicsCheck.checked = session.visuals.graphics_required;
+
+        const whyChosenInput = cardEl.querySelector(`#why-chosen-input-${sessionIdx}`);
+        if (whyChosenInput) whyChosenInput.value = session.visuals.why_chosen;
+
+        const templateTitleInput = cardEl.querySelector(`#template-title-input-${sessionIdx}`);
+        if (templateTitleInput) templateTitleInput.value = session.visuals.content?.title || '';
+
+        // Hide/show content blocks depending on template choice
+        toggleSlideTextVisibility(sessionIdx, session.visuals.template_name);
+
+        const itemsContainer = cardEl.querySelector(`#template-items-container-${sessionIdx}`);
+        if (itemsContainer) {
+            renderSessionVisualContent(session, sessionIdx, itemsContainer);
+        }
         
         markDirty();
         
@@ -529,7 +974,9 @@ function exportKeypointsJSON() {
                 end: end,
                 sentence_indices: s.sentence_indices,
                 heading: s.heading || '',
-                subheadings: s.subheadings || []
+                subheadings: s.subheadings || [],
+                text_content: s.text_content || '',
+                visuals: s.visuals || { template_name: 'Face Only', why_chosen: '', graphics_required: false, content: { title: '', items: [], details: [] } }
             };
         })
     };
@@ -543,6 +990,65 @@ function exportKeypointsJSON() {
     document.body.appendChild(downloadAnchor);
     downloadAnchor.click();
     downloadAnchor.remove();
+}
+
+async function exportKeypointsDocx() {
+    if (sessions.length === 0) {
+        alert('No sessions to export.');
+        return;
+    }
+
+    btnExportDocx.disabled = true;
+    const originalText = btnExportDocx.innerHTML;
+    btnExportDocx.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Exporting...';
+
+    try {
+        const payload = {
+            sessions: sessions.map((s, idx) => {
+                return {
+                    id: idx,
+                    title: s.title || '',
+                    summary: s.summary || '',
+                    sentence_indices: s.sentence_indices || [],
+                    heading: s.heading || '',
+                    subheadings: s.subheadings || [],
+                    text_content: s.text_content || '',
+                    visuals: s.visuals || { template_name: 'Face Only', why_chosen: '', graphics_required: false, content: { title: '', items: [], details: [] } }
+                };
+            })
+        };
+
+        const response = await fetch(`/api/export-docx/${encodeURIComponent(activeFile)}`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(payload)
+        });
+
+        if (!response.ok) {
+            const errData = await response.json();
+            throw new Error(errData.error || 'Failed to export document');
+        }
+
+        const blob = await response.blob();
+        const downloadUrl = window.URL.createObjectURL(blob);
+        const downloadAnchor = document.createElement('a');
+        downloadAnchor.href = downloadUrl;
+
+        const baseName = activeFile.substring(0, activeFile.lastIndexOf('.')) || activeFile;
+        downloadAnchor.setAttribute("download", `${baseName}_curriculum_export.docx`);
+        document.body.appendChild(downloadAnchor);
+        downloadAnchor.click();
+        downloadAnchor.remove();
+        window.URL.revokeObjectURL(downloadUrl);
+    } catch (err) {
+        console.error(err);
+        alert('Error exporting DOCX: ' + err.message);
+    } finally {
+        btnExportDocx.disabled = false;
+        btnExportDocx.innerHTML = originalText;
+    }
 }
 
 // --------------------------------------------------------------------------
@@ -562,4 +1068,21 @@ function escapeHtml(text) {
         .replace(/>/g, "&gt;")
         .replace(/"/g, "&quot;")
         .replace(/'/g, "&#039;");
+}
+
+// Toggle visibility of subheading and text content fields based on Face Only mode
+function toggleSlideTextVisibility(index, templateName) {
+    const subBlock = document.getElementById(`subheadings-block-${index}`);
+    const textBlock = document.getElementById(`text-content-block-${index}`);
+    const contentBlock = document.getElementById(`visual-content-editor-block-${index}`);
+    
+    if (templateName === 'Face Only') {
+        if (subBlock) subBlock.classList.add('hidden');
+        if (textBlock) textBlock.classList.add('hidden');
+        if (contentBlock) contentBlock.classList.add('hidden');
+    } else {
+        if (subBlock) subBlock.classList.remove('hidden');
+        if (textBlock) textBlock.classList.remove('hidden');
+        if (contentBlock) contentBlock.classList.remove('hidden');
+    }
 }
