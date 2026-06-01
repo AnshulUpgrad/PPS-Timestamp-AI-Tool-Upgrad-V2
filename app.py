@@ -682,7 +682,7 @@ def generate_session_keypoints():
     
     try:
         req = urllib.request.Request(url, data=json.dumps(body).encode('utf-8'), headers=headers, method='POST')
-        with urllib.request.urlopen(req, timeout=60) as response:
+        with urllib.request.urlopen(req, timeout=180) as response:
             response_data = json.loads(response.read().decode('utf-8'))
             
         candidates = response_data.get('candidates', [])
@@ -761,81 +761,121 @@ def chunk_sessions():
     if not sentences:
         return jsonify({'error': 'No sentences provided for chunking.'}), 400
         
-    # Construct the sentences payload for prompt
-    sentences_str = ""
-    for s in sentences:
-        sentences_str += f"[{s['id']}] {s['text']}\n"
-        
-    # Design prompt
-    prompt_tmpl = load_prompt_template('session_chunking.md')
-    prompt = prompt_tmpl.format(
-        last_index=len(sentences) - 1,
-        sentences_str=sentences_str
-    )
+    # Construct the iterative batching logic
+    BATCH_SIZE = 40
+    sessions = []
     
     import urllib.request
     import urllib.error
     
-    url = f"https://generativelanguage.googleapis.com/v1beta/models/{model_name}:generateContent?key={api_key}"
-    
-    headers = {
-        'Content-Type': 'application/json'
-    }
-    
-    body = {
-        "contents": [
-            {
-                "parts": [
-                    {"text": prompt}
-                ]
-            }
-        ],
-        "generationConfig": {
-            "responseMimeType": "application/json",
-            "responseSchema": {
-                "type": "ARRAY",
-                "items": {
-                    "type": "OBJECT",
-                    "properties": {
-                        "title": {"type": "STRING"},
-                        "summary": {"type": "STRING"},
-                        "sentence_indices": {
-                            "type": "ARRAY",
-                            "items": {"type": "INTEGER"}
-                        }
-                    },
-                    "required": ["title", "summary", "sentence_indices"]
+    # Helper to chunk a specific batch of sentences using Gemini API
+    def call_gemini_chunker(batch_sentences):
+        sentences_str = ""
+        for s in batch_sentences:
+            sentences_str += f"[{s['id']}] {s['text']}\n"
+            
+        first_idx = batch_sentences[0]['id']
+        last_idx = batch_sentences[-1]['id']
+        
+        prompt_tmpl = load_prompt_template('session_chunking.md')
+        prompt = prompt_tmpl.replace("{first_index}", str(first_idx)).replace("{last_index}", str(last_idx)).replace("{sentences_str}", sentences_str)
+        # Fallback for old templates
+        prompt = prompt.replace("from 0 to", f"from {first_idx} to")
+        
+        url = f"https://generativelanguage.googleapis.com/v1beta/models/{model_name}:generateContent?key={api_key}"
+        headers = {
+            'Content-Type': 'application/json'
+        }
+        
+        body = {
+            "contents": [
+                {
+                    "parts": [
+                        {"text": prompt}
+                    ]
+                }
+            ],
+            "generationConfig": {
+                "responseMimeType": "application/json",
+                "responseSchema": {
+                    "type": "ARRAY",
+                    "items": {
+                        "type": "OBJECT",
+                        "properties": {
+                            "title": {"type": "STRING"},
+                            "summary": {"type": "STRING"},
+                            "sentence_indices": {
+                                "type": "ARRAY",
+                                "items": {"type": "INTEGER"}
+                            }
+                        },
+                        "required": ["title", "summary", "sentence_indices"]
+                    }
                 }
             }
         }
-    }
-    
-    try:
+        
         req = urllib.request.Request(url, data=json.dumps(body).encode('utf-8'), headers=headers, method='POST')
-        with urllib.request.urlopen(req, timeout=60) as response:
+        with urllib.request.urlopen(req, timeout=180) as response:
             response_data = json.loads(response.read().decode('utf-8'))
             
         candidates = response_data.get('candidates', [])
         if not candidates:
-            return jsonify({'error': 'No response candidates received from Gemini API.', 'details': response_data}), 500
+            raise Exception("No response candidates received from Gemini API.")
             
         text_response = candidates[0].get('content', {}).get('parts', [{}])[0].get('text', '')
         if not text_response:
-            return jsonify({'error': 'Empty response from Gemini API.', 'details': response_data}), 500
+            raise Exception("Empty response from Gemini API.")
             
-        sessions = json.loads(text_response.strip())
-        return jsonify({'sessions': sessions}), 200
+        return json.loads(text_response.strip())
         
-    except urllib.error.HTTPError as e:
-        error_body = e.read().decode('utf-8')
+    i = 0
+    total_sentences = len(sentences)
+    
+    while i < total_sentences:
+        current_batch_sentences = sentences[i:i + BATCH_SIZE]
+        
+        if not sessions:
+            # First batch: just chunk the first 40 sentences
+            batch_to_chunk = current_batch_sentences
+            i += BATCH_SIZE
+        else:
+            # Bundle the last 2 chunks from the previous batch with the next 40 sentences
+            last_chunks_count = min(2, len(sessions))
+            last_two_chunks = sessions[-last_chunks_count:]
+            
+            # Extract sentence indices from those last chunks
+            bundled_indices = []
+            for chunk in last_two_chunks:
+                bundled_indices.extend(chunk.get('sentence_indices', []))
+                
+            # Get actual sentence dicts for those indices
+            bundled_sentences = [s for s in sentences if s['id'] in bundled_indices]
+            
+            # Combine the last 2 chunks' sentences with the next 40 sentences
+            batch_to_chunk = bundled_sentences + current_batch_sentences
+            
+            # Remove the last chunks from sessions since they are being re-chunked
+            sessions = sessions[:-last_chunks_count]
+            
+            # Advance our pointer
+            i += BATCH_SIZE
+            
         try:
-            error_json = json.loads(error_body)
-            error_msg = error_json.get('error', {}).get('message', str(e))
-        except Exception:
-            error_msg = error_body or str(e)
-        return jsonify({'error': f"Gemini API HTTP Error: {error_msg}"}), e.code
-    except Exception as e:
-        return jsonify({'error': f"Failed to run Gemini chunking: {str(e)}"}), 500
+            new_sessions = call_gemini_chunker(batch_to_chunk)
+            sessions.extend(new_sessions)
+        except urllib.error.HTTPError as e:
+            error_body = e.read().decode('utf-8')
+            try:
+                error_json = json.loads(error_body)
+                error_msg = error_json.get('error', {}).get('message', str(e))
+            except Exception:
+                error_msg = error_body or str(e)
+            return jsonify({'error': f"Gemini API HTTP Error at sentence index {i - BATCH_SIZE}: {error_msg}"}), e.code
+        except Exception as e:
+            return jsonify({'error': f"Failed to run Gemini chunking at sentence index {i - BATCH_SIZE}: {str(e)}"}), 500
+            
+    return jsonify({'sessions': sessions}), 200
 
 @app.route('/api/chunks/<path:filename>', methods=['GET'])
 def get_chunks(filename):
@@ -1022,16 +1062,6 @@ def export_docx(filename):
         # Left Cell Shading (very light blue/gray for Session Column)
         set_cell_background(row_cells[0], "F8FAFC") # Slate 50
         
-        # Left Cell Content
-        cell_left = row_cells[0]
-        p_session = cell_left.paragraphs[0]
-        p_session.paragraph_format.space_after = Pt(4)
-        run_s_title = p_session.add_run(f"Plate {idx + 1}")
-        run_s_title.font.name = 'Calibri'
-        run_s_title.font.size = Pt(11)
-        run_s_title.font.bold = True
-        run_s_title.font.color.rgb = RGBColor(30, 41, 59) # Slate 800
-        
         # Time duration
         session_start = 0.0
         session_end = 0.0
@@ -1044,6 +1074,45 @@ def export_docx(filename):
             if last_sent:
                 session_end = last_sent.get('end', 0.0)
         duration_str = f"Time: {format_seconds(session_start)} - {format_seconds(session_end)}"
+        
+        # Visual Template
+        visuals = session.get('visuals', {})
+        template_name = visuals.get('template_name', 'Face Only')
+        why_chosen = visuals.get('why_chosen', '')
+        graphics_req = visuals.get('graphics_required', False)
+        v_content = visuals.get('content', {})
+        v_title = v_content.get('title', '')
+        v_items = v_content.get('items', [])
+        v_details = v_content.get('details', [])
+        
+        # Get first subheading timestamp (defaulting to session_start if none)
+        first_sub_ts = None
+        if v_items:
+            first_sub_ts = v_items[0].get('timestamp')
+        if first_sub_ts is None and v_details:
+            first_sub_ts = v_details[0].get('timestamp')
+            
+        if first_sub_ts is None:
+            first_sub_ts = session_start
+            
+        first_sub_ts_str = format_seconds(first_sub_ts)
+
+        # Left Cell Content
+        cell_left = row_cells[0]
+        p_session = cell_left.paragraphs[0]
+        p_session.paragraph_format.space_after = Pt(4)
+        run_s_title = p_session.add_run(f"Plate {idx + 1}")
+        run_s_title.font.name = 'Calibri'
+        run_s_title.font.size = Pt(11)
+        run_s_title.font.bold = True
+        run_s_title.font.color.rgb = RGBColor(30, 41, 59) # Slate 800
+        
+        # Plain text timestamp beside heading
+        run_s_ts = p_session.add_run(f" {first_sub_ts_str}")
+        run_s_ts.font.name = 'Calibri'
+        run_s_ts.font.size = Pt(11)
+        run_s_ts.font.bold = False
+        run_s_ts.font.color.rgb = RGBColor(30, 41, 59)
         
         p_time = cell_left.add_paragraph()
         p_time.paragraph_format.space_after = Pt(8)
@@ -1078,16 +1147,6 @@ def export_docx(filename):
         
         # Right Cell Content
         cell_right = row_cells[1]
-        
-        # Visual Template
-        visuals = session.get('visuals', {})
-        template_name = visuals.get('template_name', 'Face Only')
-        why_chosen = visuals.get('why_chosen', '')
-        graphics_req = visuals.get('graphics_required', False)
-        v_content = visuals.get('content', {})
-        v_title = v_content.get('title', '')
-        v_items = v_content.get('items', [])
-        v_details = v_content.get('details', [])
         
         p_temp = cell_right.paragraphs[0]
         p_temp.paragraph_format.space_before = Pt(0)
@@ -1152,6 +1211,12 @@ def export_docx(filename):
                 run_v_title_val.font.bold = True
                 run_v_title_val.font.color.rgb = RGBColor(0, 0, 0)
                 
+                run_v_title_ts = p_v_title.add_run(f" {first_sub_ts_str}")
+                run_v_title_ts.font.name = 'Calibri'
+                run_v_title_ts.font.size = Pt(9.5)
+                run_v_title_ts.font.bold = False
+                run_v_title_ts.font.color.rgb = RGBColor(0, 0, 0)
+                
             if v_items:
                 for item in v_items:
                     p_v_item = cell_right.add_paragraph(style='List Bullet 2')
@@ -1163,12 +1228,13 @@ def export_docx(filename):
                     run_ts = p_v_item.add_run(f"[{format_seconds(item_ts)}] ")
                     run_ts.font.name = 'Calibri'
                     run_ts.font.size = Pt(8.5)
-                    run_ts.font.bold = True
+                    run_ts.font.bold = False
                     run_ts.font.color.rgb = RGBColor(0, 0, 0)
                     
                     run_val = p_v_item.add_run(item_val)
                     run_val.font.name = 'Calibri'
                     run_val.font.size = Pt(9)
+                    run_val.font.bold = True
                     run_val.font.color.rgb = RGBColor(0, 0, 0)
                     
             if v_details:
@@ -1183,7 +1249,7 @@ def export_docx(filename):
                     run_ts = p_v_detail.add_run(f"[{format_seconds(d_ts)}] ")
                     run_ts.font.name = 'Calibri'
                     run_ts.font.size = Pt(8.5)
-                    run_ts.font.bold = True
+                    run_ts.font.bold = False
                     run_ts.font.color.rgb = RGBColor(0, 0, 0)
                     
                     run_lbl = p_v_detail.add_run(f"{d_label}: ")
@@ -1195,27 +1261,10 @@ def export_docx(filename):
                     run_val = p_v_detail.add_run(d_val)
                     run_val.font.name = 'Calibri'
                     run_val.font.size = Pt(9)
+                    run_val.font.bold = True
                     run_val.font.color.rgb = RGBColor(0, 0, 0)
                     
-        # Additional Text Content
-        text_content = session.get('text_content', '')
-        if text_content:
-            p_add_hdr = cell_right.add_paragraph()
-            p_add_hdr.paragraph_format.space_before = Pt(8)
-            p_add_hdr.paragraph_format.space_after = Pt(2)
-            run_add_hdr = p_add_hdr.add_run("Additional Content / Notes:")
-            run_add_hdr.font.name = 'Calibri'
-            run_add_hdr.font.size = Pt(9.5)
-            run_add_hdr.font.bold = True
-            run_add_hdr.font.color.rgb = RGBColor(71, 85, 105) # Slate 600
-            
-            p_add_body = cell_right.add_paragraph()
-            p_add_body.paragraph_format.line_spacing = 1.15
-            p_add_body.paragraph_format.space_after = Pt(0)
-            run_add_body = p_add_body.add_run(text_content)
-            run_add_body.font.name = 'Calibri'
-            run_add_body.font.size = Pt(9)
-            run_add_body.font.color.rgb = RGBColor(51, 65, 85) # Slate 700
+        # Additional Text Content is omitted from the DOCX file per user request
             
     # Save to BytesIO
     file_stream = io.BytesIO()

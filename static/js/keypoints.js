@@ -71,6 +71,7 @@ async function loadWorkspaceData() {
         
         if (chunkData.exists && chunkData.sessions && chunkData.sessions.length > 0) {
             sessions = chunkData.sessions;
+            recalculateSessionTimestamps();
         } else {
             alert('No confirmed chunks found for this file. Please create chunks first.');
             window.location.href = `/chunking?file=${encodeURIComponent(activeFile)}`;
@@ -189,16 +190,12 @@ function setupEventListeners() {
     });
 }
 
-// --------------------------------------------------------------------------
-// RENDER LEFT SIDE: Read-Only Chunks
-// --------------------------------------------------------------------------
-function renderReadOnlyChunks() {
-    readOnlySessionsWrapper.innerHTML = '';
-    
-    sessions.forEach((session, index) => {
-        let sessionStart = 0;
-        let sessionEnd = 0;
-        
+// Recalculate session start and end times based on sentence indices
+function recalculateSessionTimestamps() {
+    if (!sessions || sessions.length === 0) return;
+    sessions.forEach(session => {
+        let start = 0;
+        let end = 0;
         if (session.sentence_indices.length > 0) {
             const firstId = session.sentence_indices[0];
             const lastId = session.sentence_indices[session.sentence_indices.length - 1];
@@ -206,9 +203,26 @@ function renderReadOnlyChunks() {
             const firstSent = sentences.find(s => s.id === firstId);
             const lastSent = sentences.find(s => s.id === lastId);
             
-            if (firstSent) sessionStart = firstSent.start;
-            if (lastSent) sessionEnd = lastSent.end;
+            if (firstSent) start = firstSent.start;
+            if (lastSent) end = lastSent.end;
         }
+        session.start = start;
+        session.end = end;
+    });
+}
+
+// --------------------------------------------------------------------------
+// RENDER LEFT SIDE: Read-Only Chunks
+// --------------------------------------------------------------------------
+function renderReadOnlyChunks() {
+    readOnlySessionsWrapper.innerHTML = '';
+    
+    // Ensure timestamps are updated on session objects in state
+    recalculateSessionTimestamps();
+    
+    sessions.forEach((session, index) => {
+        const sessionStart = session.start || 0;
+        const sessionEnd = session.end || 0;
 
         const card = document.createElement('div');
         card.className = 'session-card';
@@ -962,24 +976,18 @@ function exportKeypointsJSON() {
         return;
     }
 
+    recalculateSessionTimestamps();
+
     const exportData = {
         filename: activeFile,
         duration: duration,
         sessions: sessions.map((s, idx) => {
-            let start = 0;
-            let end = 0;
-            if (s.sentence_indices.length > 0) {
-                const firstS = sentences.find(sent => sent.id === s.sentence_indices[0]);
-                const lastS = sentences.find(sent => sent.id === s.sentence_indices[s.sentence_indices.length - 1]);
-                if (firstS) start = firstS.start;
-                if (lastS) end = lastS.end;
-            }
             return {
                 id: idx,
                 title: s.title,
                 summary: s.summary,
-                start: start,
-                end: end,
+                start: s.start || 0,
+                end: s.end || 0,
                 sentence_indices: s.sentence_indices,
                 heading: s.heading || '',
                 subheadings: s.subheadings || [],
