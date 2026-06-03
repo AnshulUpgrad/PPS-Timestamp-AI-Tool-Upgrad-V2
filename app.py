@@ -133,8 +133,13 @@ root = tk.Tk()
 root.withdraw()
 root.attributes('-topmost', True)
 file_path = filedialog.askopenfilename(
-    title="Select Video File",
-    filetypes=[("Video Files", "*.mp4 *.webm *.mov *.avi *.mkv *.m4v"), ("All Files", "*.*")]
+    title="Select Media File",
+    filetypes=[
+        ("Media Files", "*.mp4 *.webm *.mov *.avi *.mkv *.m4v *.mp3 *.wav *.m4a"),
+        ("Video Files", "*.mp4 *.webm *.mov *.avi *.mkv *.m4v"),
+        ("Audio Files", "*.mp3 *.wav *.m4a"),
+        ("All Files", "*.*")
+    ]
 )
 print(file_path, end="")
 root.destroy()
@@ -214,6 +219,8 @@ def extract_audio():
     if mode == 'copy':
         if ext in ['webm', 'mkv']:
             out_ext = 'webm'
+        elif ext in ['mp3', 'wav', 'm4a']:
+            out_ext = ext
         else:
             out_ext = 'm4a'
             

@@ -341,6 +341,23 @@ async function runNativeExtraction() {
     logConsole.classList.remove('hidden');
     logChevron.classList.add('rotated');
     
+    const ext = selectedVideo.name.split('.').pop().toLowerCase();
+    const isAudio = ['mp3', 'wav', 'm4a'].includes(ext);
+
+    // Update dynamic titles/labels in UI
+    const processingTitleEl = document.getElementById('processing-title');
+    if (processingTitleEl) {
+        processingTitleEl.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> Processing Your ${isAudio ? 'Audio' : 'Video'}`;
+    }
+    const statOriginalLabelEl = document.getElementById('stat-original-label');
+    if (statOriginalLabelEl) {
+        statOriginalLabelEl.textContent = isAudio ? 'Original Audio' : 'Original Video';
+    }
+    const resetBtnTextEl = document.getElementById('reset-btn-text');
+    if (resetBtnTextEl) {
+        resetBtnTextEl.textContent = isAudio ? 'Process Another Audio' : 'Extract Another Video';
+    }
+    
     const extractionMode = document.querySelector('input[name="extraction-mode"]:checked').value;
     writeLog(`Native extraction pipeline started for file: ${selectedVideo.name}`);
 
@@ -349,9 +366,9 @@ async function runNativeExtraction() {
         if (isColabMode && fileToUpload) {
             updateStepState(stepWasm, 'active');
             const stepWasmTitle = stepWasm.querySelector('.step-title');
-            stepWasmTitle.textContent = 'Uploading video file';
+            stepWasmTitle.textContent = isAudio ? 'Uploading audio file' : 'Uploading video file';
             
-            writeLog(`Uploading video file to Colab server: ${fileToUpload.name} (${formatBytes(fileToUpload.size)})...`);
+            writeLog(`Uploading ${isAudio ? 'audio' : 'video'} file to Colab server: ${fileToUpload.name} (${formatBytes(fileToUpload.size)})...`);
             
             // Perform the upload with a progress callback
             const uploadResult = await uploadFileWithProgress(fileToUpload, (percent, loaded, total) => {
@@ -390,9 +407,9 @@ async function runNativeExtraction() {
 
         // --- STEP 2: EXTRACTING AUDIO ---
         updateStepState(stepExtract, 'active');
-        stepExtractDesc.textContent = 'Extracting audio from video...';
+        stepExtractDesc.textContent = isAudio ? 'Processing audio track...' : 'Extracting audio from video...';
         
-        writeLog('Extracting audio track...');
+        writeLog(isAudio ? 'Processing audio track...' : 'Extracting audio track...');
         const extractResp = await fetch('/api/extract', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -403,12 +420,12 @@ async function runNativeExtraction() {
         });
         
         if (!extractResp.ok) {
-            let errMsg = 'Audio extraction failed.';
+            let errMsg = isAudio ? 'Audio processing failed.' : 'Audio extraction failed.';
             try {
                 const errData = await extractResp.json();
                 errMsg = errData.error || errMsg;
             } catch (e) {
-                errMsg = `Server error during audio extraction (Status: ${extractResp.status}). Please check flask.log in Google Colab for details.`;
+                errMsg = `Server error during audio ${isAudio ? 'processing' : 'extraction'} (Status: ${extractResp.status}). Please check flask.log in Google Colab for details.`;
             }
             throw new Error(errMsg);
         }
@@ -416,8 +433,8 @@ async function runNativeExtraction() {
         const data = await extractResp.json();
         
         updateStepState(stepExtract, 'completed');
-        stepExtractDesc.textContent = 'Audio successfully extracted';
-        writeLog(`Extraction successful: Saved as ${data.filename}`);
+        stepExtractDesc.textContent = isAudio ? 'Audio successfully processed' : 'Audio successfully extracted';
+        writeLog(`Processing successful: Saved as ${data.filename}`);
         
         // --- STEP 3: RUN TRANSCRIPTION ---
         const stepTranscribe = document.getElementById('step-transcribe');
@@ -501,7 +518,7 @@ function resetProcessingUI() {
     });
     
     stepWasmDesc.textContent = 'Setting up...';
-    stepExtractDesc.textContent = 'Converting video to sound file...';
+    stepExtractDesc.textContent = 'Preparing audio track...';
     stepTranscribeDesc.textContent = 'Generating word-level transcript...';
     
     // Hide details / dashboards
@@ -629,7 +646,7 @@ async function loadAudioLibrary() {
                 </div>
                 <div class="audio-player-wrapper">
                     <audio controls preload="none">
-                        <source src="${file.url}" type="audio/${ext === 'mp3' ? 'mpeg' : (ext === 'webm' ? 'webm' : 'mp4')}">
+                        <source src="${file.url}" type="audio/${ext === 'mp3' ? 'mpeg' : (ext === 'wav' ? 'wav' : (ext === 'webm' ? 'webm' : 'mp4'))}">
                         Your browser does not support the audio element.
                     </audio>
                 </div>

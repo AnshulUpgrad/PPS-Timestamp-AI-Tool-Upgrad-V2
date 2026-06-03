@@ -1,0 +1,880 @@
+TEMPLATE USAGE GUIDE FOR PPS CREATION (Continued) 
+
+Excellent. Since you've now shared the template document, I can generate the remaining template guidelines accurately. Below are the next templates after 20, written in the same format and style as your existing guide, based on the document guidelines. 
+
+ 
+
+TEMPLATE 21 – SPLIT SCREEN ( 3TYPES) 
+
+Purpose 
+
+Used to introduce three types, categories, styles, classifications, or options in a visually appealing split-screen format. 
+
+When to Use 
+
+Introducing 3 styles, classifications, or models. 
+
+Showing 3 different options within a framework. 
+
+When each category either does not require a further description or only requires a short 10-15 words explanation. 
+
+How to Identify This Situation in a Script 
+
+Look for: 
+
+"There are 3 types..." 
+
+"The categories include..." 
+
+"The model consists of..." 
+
+"The following styles are commonly used..." 
+
+What Appears on Screen 
+
+Main heading. 
+
+3 categories/types. 
+
+Short description for each category if needed. 
+
+Icons for each of the three types/categories. 
+
+Do's and Don'ts 
+
+Use when introducing 3 categories/types. 
+
+Keep descriptions concise (5-6 words). 
+
+Heading - ALL CAPS, Subheading - Title Case, Description - Sentence case  
+
+Heading should be max. Two words  
+
+Icons can be replaced with a short description (not recommended though)   
+
+Subheading inside the circle can be max 2-3 words.   
+
+Example Script Cue 
+
+"There are 3 stages of customer awareness..." 
+
+ 
+
+TEMPLATE 22 – SPLIT SCREEN (TYPES WITH DESCRIPTION) 
+
+Purpose 
+
+Used to visually represent the key highlights or summarize the points or takeaways of a topic in 5-7 points where each point has a title and description of 5-10 words. OR Used to display multiple categories where each category requires explanation of around 5-10 words. 
+
+When to Use 
+
+Explaining types, categories, or classifications. 
+
+When each category needs supporting points or a longer description. 
+
+Showing grouped concepts. 
+
+How to Identify This Situation in a Script 
+
+Look for: 
+
+"The model contains four elements..." 
+
+"There are five leadership styles..." 
+
+"Each category has unique characteristics..." 
+
+What Appears on Screen 
+
+Heading. 
+
+Category title. 
+
+Supporting description (5-10 words). 
+
+Icons or numbers. 
+
+Do's and Don'ts 
+
+Use when categories require a brief explanation. 
+
+Keep descriptions concise. 
+
+Heading - ALL CAPS , Subheading - Title Case, Description - Sentence case  
+
+Heading should be max. two words  
+
+Icons cannot be omitted, but can be replaced with numbers.   
+
+Can be a maximum of five at a time else first two will slide up  
+
+Word count should not be exceeded (Max 10 words) 
+
+Example Script Cue 
+
+"There are four major leadership styles, each suited to different situations." 
+
+ 
+
+TEMPLATE 23 – PROCESS FLOW (MODERN PROCESS) 
+
+Purpose 
+
+Used to show a process, workflow, journey, or sequence where each step in the flow/sequence/journey can be titled in 1-5 words. 
+
+When to Use 
+
+Showing a process with only the step title (1-5 words) and no description. 
+
+Displaying workflows. 
+
+Presenting customer journeys. 
+
+Explaining frameworks with sequential steps. 
+
+How to Identify This Situation in a Script 
+
+Look for: 
+
+"First..." 
+
+"Then..." 
+
+"Next..." 
+
+"Finally..." 
+
+"The process consists of..." 
+
+What Appears on Screen 
+
+Heading. 
+
+Process stages. 
+
+Icons or numbers. 
+
+No supporting descriptions. 
+
+Flow indicators. 
+
+Do's and Don'ts 
+
+Use when order matters. 
+
+Keep stage title concise. 
+
+Use visual progression. 
+
+Do not use for unrelated categories. 
+
+Heading - ALL CAPS, Subheading - Title Case, Description - Sentence case. 
+
+Icons can be replaced with numbers. 
+
+Maximum five stages visible at one time. 
+
+If more than five stages, first stage can slide out. 
+
+Best used for process/flow explanations. 
+
+Example Script Cue 
+
+"The conflict resolution process involves understanding, planning, communicating, negotiating, and reviewing." 
+
+ 
+
+TEMPLATE 24 – GLASSBOX (PERCENTAGE) 
+
+Purpose 
+
+Used to display a statistics fact involving percentages, numerical findings, survey results, or quantitative data in a visually impactful manner. 
+
+When to Use 
+
+Showing percentages. 
+
+Displaying survey findings. 
+
+Presenting research statistics. 
+
+Highlighting an important numerical data/fact. 
+
+How to Identify This Situation in a Script 
+
+Look for: 
+
+"75% of employees..." 
+
+"According to the survey..." 
+
+"The study found..." 
+
+"Only 20%..." 
+
+What Appears on Screen 
+
+Percentage figure. 
+
+Short supporting text. 
+
+Optional heading (Split Screen version only). 
+
+Highlighted keywords. 
+
+Do's and Don'ts 
+
+Use for data-driven content. 
+
+Highlight key statistics. 
+
+Keep supporting text short. 
+
+Do not overload with multiple explanations. 
+
+Description Header - ALL CAPS, Description/Text - Sentence case. 
+
+Heading is optional and allowed only in Split Screen version. 
+
+Example Script Cue 
+
+"Research shows that 78% of customers are willing to pay more for better service." 
+
+ 
+
+TEMPLATE 25 – GLASSBOX (COMPANY LOGO) 
+
+Purpose 
+
+Used to display company logos, brand logos, product logos, organization logos, or image collections. In discussions about a company or brand or it’s strategy or facts – this template can display the logo and this help create a recall value for learners. 
+
+When to Use 
+
+Showing examples of companies. 
+
+Displaying competitors. 
+
+Showing brand ecosystems. 
+
+Presenting organization logos. 
+
+How to Identify This Situation in a Script 
+
+Look for: 
+
+"Companies such as..." 
+
+"Examples include..." 
+
+"Brands like..." 
+
+"The following organizations..." 
+
+What Appears on Screen 
+
+Logo/Images 
+
+Do's and Don'ts 
+
+Use only for logo/image. 
+
+No text descriptions. 
+
+No headings. 
+
+Keep logos high quality. 
+
+Do not use for explanatory content. 
+
+Example Script Cue 
+
+"Examples of leading technology companies include Apple, Google, Microsoft, and Amazon." 
+
+ 
+
+TEMPLATE 26 – QUESTION BOX 
+
+Purpose 
+
+Used to display a key question, reflection prompt, discussion question, or thought-provoking statement that the learner should focus on. 
+
+When to Use 
+
+Introducing discussion questions. 
+
+Reflection activities. 
+
+Critical thinking prompts. 
+
+Engagement moments. 
+
+How to Identify This Situation in a Script 
+
+Look for: 
+
+"Think about this..." 
+
+"Consider the following question..." 
+
+"What would you do if..." 
+
+"Have you ever wondered..." 
+
+What Appears on Screen 
+
+Question box. 
+
+Question text. 
+
+Optional emphasis styling. 
+
+Do's and Don'ts 
+
+Use only when the focus is the question. 
+
+Keep question concise. 
+
+Avoid long explanations. 
+
+Question text- Sentence case. 
+
+Question can have a maximum of 25 words. 
+
+Example Script Cue 
+
+"What would you do if your team members completely disagreed with each other?" 
+
+ 
+
+TEMPLATE 27 – DEFINITION PLATE 
+
+Purpose 
+
+Used to introduce and explain a key concept, theory, framework, model, or term through a formal definition. This is the primary template for displaying definitions in academic and corporate learning content. 
+
+When to Use 
+
+Defining a concept. 
+
+Introducing a new term. 
+
+Explaining theories or frameworks. 
+
+Showing dictionary-style definitions. 
+
+Explaining important terminology. 
+
+How to Identify This Situation in a Script 
+
+Look for: 
+
+"X can be defined as..." 
+
+"The definition of..." 
+
+"According to..." 
+
+"X refers to..." 
+
+"X is a process by which..." 
+
+What Appears on Screen 
+
+Heading. 
+
+Optional subheading. 
+
+Definition text. 
+
+Supporting vector/illustration on right side. 
+
+Optional highlighted keywords. 
+
+Do's and Don'ts 
+
+Use when the primary purpose is to define a concept. 
+
+Keep the definition readable. 
+
+Highlight important keywords. 
+
+Can use pointers but not recommended. 
+
+Do not use for long explanations. 
+
+Do not use for processes. 
+
+Heading - ALL CAPS, Subheading - Title Case, Description - Sentence case. 
+
+Subheading is optional. 
+
+Highlight words must be specified and highlighted in red. 
+
+The vector/illustration on the right should be specified. 
+
+Example Script Cue 
+
+"Conflict is a process that begins when one party perceives that another party has negatively affected something they care about." 
+
+ 
+
+TEMPLATE 28 – QUOTE PLATE 
+
+Purpose 
+
+Used to highlight memorable quotes, famous statements, principles, laws, sayings, or impactful one-liners. 
+
+When to Use 
+
+Showing famous quotes. 
+
+Displaying key principles. 
+
+Presenting memorable statements. 
+
+Introducing thought-provoking ideas. 
+
+How to Identify This Situation in a Script 
+
+Look for: 
+
+"As Peter Drucker said..." 
+
+"There is a famous saying..." 
+
+"A well-known quote states..." 
+
+What Appears on Screen 
+
+Quote text. 
+
+Highlighted keywords. 
+
+Optional quotation styling. 
+
+Do's and Don'ts 
+
+Use for powerful, memorable statements. 
+
+Highlight important words. 
+
+Do not add full stops at the end. 
+
+Do not use speaker images. 
+
+Keep the quote concise. 
+
+Description - Sentence case. 
+
+Keywords should be black and bold. 
+
+Highlight words must be specified in PPS. 
+
+Image of the speaker cannot be added. 
+
+Example Script Cue 
+
+"When all you have is a hammer, every problem looks like a nail." 
+
+ 
+
+TEMPLATE 29 – TAKEAWAY PLATE 
+
+Purpose 
+
+Used to reinforce a key learning point, insight, conclusion, or lesson that learners should remember. OR for a short definition for a term or concept. 
+
+When to Use 
+
+Key takeaway. 
+
+Small definition. 
+
+Key learning moments. 
+
+Summary statements. 
+
+Important reminders. 
+
+How to Identify This Situation in a Script 
+
+Look for: 
+
+"The key takeaway is..." 
+
+"Remember that..." 
+
+"The most important thing is..." 
+
+"In summary..." 
+“So what ___ means is...” 
+
+What Appears on Screen 
+
+Takeaway statement. 
+
+Highlighted keywords in red. 
+
+Minimal text. 
+
+Do's and Don'ts 
+
+Use only for key learning points. 
+
+Keep the message concise. 
+
+Avoid multiple ideas in one takeaway. 
+
+Do not add full stops. 
+
+Does not allow heading. 
+
+Takeaway should ideally not exceed 14–18 words. 
+
+Highlight words must be specified in PPS. 
+
+OG version can accommodate longer text. 
+
+Example Script Cue 
+
+"You cannot solve every conflict using only one conflict style." 
+
+ 
+
+TEMPLATE 30 – BOX PLATE (HORIZONTAL) 
+
+Purpose 
+
+Used to display four concepts, categories, pillars, dimensions, or framework elements briefly in horizontally aligned boxes. 
+
+When to Use 
+
+Showing 4 framework pillars. 
+
+Displaying 4 categories. 
+
+Presenting 4 dimensions of a model. 
+
+Explaining 4 grouped concepts. 
+
+How to Identify This Situation in a Script 
+
+Look for: 
+
+"The framework consists of four elements..." 
+
+"There are four pillars..." 
+
+"The model contains..." 
+
+What Appears on Screen 
+
+Heading. 
+
+Up to four boxes. 
+
+Subheading in each box. 
+
+Pointers under each concept/box. 
+
+Optional sub-pointers. 
+
+Do's and Don'ts 
+
+Use for grouped concepts. 
+
+Keep text concise. 
+
+Maximum four boxes. 
+
+Can have sub-pointers. 
+
+Heading - ALL CAPS, Subheading - Title Case, Sub-pointers - Sentence case. 
+
+Heading cannot exceed 32 characters. 
+
+Sub-pointers limited to five words. 
+
+Example Script Cue 
+
+"The coaching framework consists of four pillars: Awareness, Action, Accountability, and Reflection." 
+
+ 
+
+TEMPLATE 31 – BOX PLATE (VERTICAL) 
+
+Purpose 
+
+Used to display 2 or 3 concepts in vertically stacked boxes when more space is required per category. 
+
+When to Use 
+
+Explaining framework components. 
+
+Showing categories requiring longer descriptions. 
+
+Presenting grouped ideas. 
+
+What Appears on Screen 
+
+Heading. 
+
+Up to three vertical boxes. 
+
+Subheadings. 
+
+Pointers for each box. 
+
+Optional sub-pointers. 
+
+Do's and Don'ts 
+
+Maximum three boxes. 
+
+Can have sub-pointers. 
+
+Heading - ALL CAPS, Subheading - Title Case, Sub-pointers - Sentence case. 
+
+Heading cannot exceed 32 characters. 
+
+Example Script Cue 
+
+"The three major responsibilities of a leader are vision, alignment, and execution." 
+
+ 
+
+TEMPLATE 32 – FACT / BACKGROUND PLATE 
+
+Purpose 
+
+Used to discuss a new concept such that it has 4-5 main points and each has a few subpoints. It can also be used to provide contextual information, historical background, origin stories, or supporting facts before introducing a concept. 
+
+When to Use 
+
+Discuss a detailed topic in a structured way with points and subpoints. 
+
+Introducing researchers. 
+
+Providing historical context. 
+
+Explaining origins. 
+
+Sharing supporting background information. 
+
+How to Identify This Situation in a Script 
+
+Look for: 
+
+"This model was developed by..." 
+
+"The concept originated from..." 
+
+"Historically..." 
+
+What Appears on Screen 
+
+Heading. 
+
+Subheadings - Main pointers/Fact title. 
+
+Sub-points for all main points. 
+
+Description. 
+
+Do's and Don'ts 
+
+Fact/Main pointer title (subheading) is mandatory. 
+
+Can use sub-pointers. 
+
+Do not use for definitions. 
+
+Heading cannot exceed 32 characters. 
+
+Heading - ALL CAPS, Subheading - Title Case, Description - Sentence case. 
+
+Example Script Cue 
+
+"The Thomas-Kilmann model was developed by Kenneth Thomas and Ralph Kilmann." 
+
+ 
+
+TEMPLATE 33 – FACT PLATE 
+
+Purpose 
+
+Used to present interesting facts, research findings, statistics, observations, or informational content. Also used to discuss a new topic with brief pointers and subpointers. 
+
+When to Use 
+
+Introduce a new detailed concept which can be organised into points and subpoints. 
+
+Research findings. 
+
+Interesting facts. 
+
+Evidence-based insights. 
+
+Supporting information. 
+
+Do's and Don'ts 
+
+The fact or main pointers title (subheadings) is mandatory. 
+
+Can have many sub-points. 
+
+Heading cannot exceed 32 characters. 
+
+Heading - ALL CAPS, Subheading - Title Case, Description - Sentence case. 
+
+Example Script Cue 
+
+"Research shows that conflict can improve decision quality when managed effectively." 
+
+ 
+
+TEMPLATE 35 – SPLIT SCREEN (GLASSBOX) 
+
+Purpose 
+
+Used to display short statements, statistics, keywords, or concepts in a visually prominent glassbox style. 
+
+When to Use 
+
+Comparisons. 
+
+Highlighting statements. 
+
+Showing key concepts. 
+
+Presenting paired information. 
+
+Do's and Don'ts 
+
+Use for short content. 
+
+Best for visual emphasis. 
+
+If only one sentence is used, keep it entirely in sentence case. 
+
+Heading - ALL CAPS, Subheading - Title Case, Description - Sentence case. 
+
+Example Script Cue 
+
+"Conflict can be constructive or destructive depending on how it is managed." 
+
+ 
+
+TEMPLATE 36 – HEAVY TEXT PLATE 
+
+Purpose 
+
+Used when the script contains text-heavy content that cannot be meaningfully converted into categories, processes, comparisons, or visual frameworks. 
+
+When to Use 
+
+Long explanations. 
+
+Detailed descriptions. 
+
+Complex academic content. 
+
+Policy or legal explanations. 
+
+Do's and Don'ts 
+
+Use only as a last resort. 
+
+Try other templates first. 
+
+Keep content readable. 
+
+Heading cannot exceed 32 characters. 
+
+Heading - ALL CAPS, Subheading - Title Case, Description - Sentence case. 
+
+Use specifically for text-heavy content. 
+
+Example Script Cue 
+
+A long explanation that cannot be simplified into a visual framework. 
+
+ 
+
+TEMPLATE 40 – IMAGE WITH DESCRIPTION 
+
+Purpose 
+
+Used when an image, person, example, object, scenario, or case study is central to understanding the content. 
+
+When to Use 
+
+Case studies. 
+
+Examples. 
+
+People. 
+
+Objects. 
+
+Scenarios. 
+
+Stories. 
+
+Do's and Don'ts 
+
+Can be used universally. 
+
+Person images must include name labels. 
+
+Can use pointers. 
+
+Source can be added at bottom. 
+
+Text in box does not require end period. 
+
+Heading - ALL CAPS, Description - Sentence case. 
+
+Example Script Cue 
+
+"Let's look at the story of Mahatma Gandhi's leadership approach." 
+
+ 
+
+TEMPLATE 41 – POINTERS 
+
+Purpose 
+
+Used for text-oriented content where information can be broken into simple, standalone points. 
+
+When to Use 
+
+Lists. 
+
+Key ideas. 
+
+Characteristics. 
+
+Features. 
+
+Benefits. 
+
+Do's and Don'ts 
+
+Text-oriented plate. 
+
+No sub-points allowed. 
+
+Maximum 15 words per pointer. 
+
+Maximum six visible pointers before slide-up. 
+
+Description - Sentence case. 
+
+No sub-pointers allowed. 
+
+Example Script Cue 
+
+"The benefits of collaboration include better ideas, higher engagement, improved trust, and stronger relationships." 
+
+ 

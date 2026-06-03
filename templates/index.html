@@ -47,9 +47,9 @@
                         <div class="icon-circle">
                             <i class="fa-solid fa-file-video select-icon"></i>
                         </div>
-                        <p class="primary-text">Select Video File</p>
-                        <p class="secondary-text">Select a video from your computer</p>
-                        <span class="file-limits">Supports MP4, WebM, MOV, AVI, MKV</span>
+                        <p class="primary-text">Select Video or Audio File</p>
+                        <p class="secondary-text">Select a video or audio file from your computer</p>
+                        <span class="file-limits">Supports MP4, MP3, WebM, MOV, AVI, MKV</span>
                     </button>
                     <input type="file" id="web-file-input" accept="video/*,audio/*" style="display: none;">
                 </div>
@@ -125,7 +125,7 @@
 
                 <!-- Processing Pipeline (Visible during operation) -->
                 <div class="processing-dashboard hidden" id="processing-dashboard">
-                    <h3><i class="fa-solid fa-spinner fa-spin"></i> Processing Your Video</h3>
+                    <h3 id="processing-title"><i class="fa-solid fa-spinner fa-spin"></i> Processing Your Video</h3>
 
                     <div class="pipeline-steps">
                         <!-- Step 1: Locating FFmpeg -->
@@ -160,7 +160,7 @@
                     <div class="reduction-dashboard hidden" id="reduction-dashboard">
                         <div class="stat-box">
                             <span class="stat-num text-danger" id="stat-original-size">0.0 MB</span>
-                            <span class="stat-label">Original Video</span>
+                            <span class="stat-label" id="stat-original-label">Original Video</span>
                         </div>
                         <div class="stat-divider"><i class="fa-solid fa-arrow-right"></i></div>
                         <div class="stat-box">
@@ -184,7 +184,7 @@
                     </div>
 
                     <button class="btn btn-secondary btn-block hidden" id="reset-btn">
-                        <i class="fa-solid fa-arrow-left"></i> Extract Another Video
+                        <i class="fa-solid fa-arrow-left"></i> <span id="reset-btn-text">Extract Another Video</span>
                     </button>
                 </div>
 

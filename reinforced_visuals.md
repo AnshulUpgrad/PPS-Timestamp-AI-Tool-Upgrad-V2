@@ -32,14 +32,12 @@ complexity:
 
 | Density | Templates |
 |---------|-----------|
-| **Low** | Face Only, Type Template 1, Process Template 1, Differentiation Template 1, Timeline Template 1 |
-| **Medium** | Type Template 2, Process Template 2, Differentiation Template 2, Graph Templates, Hierarchy Template 1 |
-| **High** | Process Template 3, Timeline Template 2 |
+| **Low** | Face Only, Type Template 1, Process Template 1, Differentiation Template 1, Timeline Template 1, Type Template No 24, Type Template No 25, Type Template No 26, Type Template No 28, Type Template No 29, Type Template No 41 |
+| **Medium** | Type Template 2, Process Template 2, Differentiation Template 2, Graph Templates, Hierarchy Template 1, Type Template No 22, Process Template 4, Type Template No 30, Type Template No 31, Type Template No 35 |
+| **High** | Process Template 3, Timeline Template 2, Type Template No 27, Type Template No 32, Type Template No 33, Type Template No 36, Type Template No 40 |
 
 ### Rule 3 — Strict Image Constraints
-- Do **not** assume or generate image assets unless using **Differentiation
-  Template 2** or **Type Template No 17** — the only templates whose layouts
-  support image integration.
+- Do **not** assume or generate image assets unless using **Differentiation Template 2**, **Type Template No 17**, **Type Template No 25**, **Type Template No 27**, or **Type Template No 40** — the only templates whose layouts support image integration.
 - For every other template, output text and data content only.
 
 ### Rule 4 — Typography & Formatting
@@ -204,6 +202,184 @@ text callouts or sub-pointer branches on specific concepts.
 
 ---
 
+#### Type Template No 22 · Split-Screen, Types with Description
+**When to use:** Split-screen layout displaying 5-7 categories or key takeaways, where each category needs a title and a brief description of 5-10 words.
+
+| Constraint | Rule |
+|------------|------|
+| Heading | ALL CAPS, max 2 words |
+| Subheadings | Title Case |
+| Description | Sentence case; max 10 words per description |
+| Icons | Line icons required (can be replaced with numbers, but cannot be omitted) |
+| Limit | Max 5 visible categories at once (if more, first two slide up) |
+
+---
+
+#### Type Template No 24 · Glassbox (Percentage)
+**When to use:** Displaying a statistics fact, quantitative survey results, or percentages in a glassbox card.
+
+| Constraint | Rule |
+|------------|------|
+| Heading | Optional, allowed ONLY in the Split-Screen version; ALL CAPS |
+| Description Header | ALL CAPS |
+| Description / Text | Sentence case |
+| Visuals | Glassbox card highlighting the percentage figure |
+
+---
+
+#### Type Template No 25 · Glassbox (Company Logo)
+**When to use:** Displaying company, brand, product, or organization logos/images to build brand recall.
+
+| Constraint | Rule |
+|------------|------|
+| Heading | ✗ Not permitted |
+| Logos / Images | High quality required (must be specified in JSON) |
+| Text / Description | ✗ Not permitted |
+
+---
+
+#### Type Template No 26 · Question Box
+**When to use:** Displaying a single focus question, reflection prompt, or discussion prompt for learner engagement.
+
+| Constraint | Rule |
+|------------|------|
+| Question Text | Sentence case; max 25 words |
+| Headings | ✗ Not permitted |
+| Explanations | ✗ Not permitted (only the question text inside the box) |
+
+---
+
+#### Type Template No 27 · Definition Plate
+**When to use:** Defining a new term, theory, framework, or dictionary-style definition.
+
+| Constraint | Rule |
+|------------|------|
+| Heading | ALL CAPS |
+| Subheading | Optional, Title Case |
+| Definition Text | Sentence case; readable & concise |
+| Keywords | Bold and highlighted in **red** (must be specified in JSON) |
+| Right Column | Supporting vector/illustration (must be specified in JSON) |
+| Processes | ✗ Do not use for sequential processes |
+
+---
+
+#### Type Template No 28 · Quote Plate
+**When to use:** Highlighting famous quotes, sayings, principles, or memorable statements.
+
+| Constraint | Rule |
+|------------|------|
+| Quote Text | Sentence case; no trailing full stops |
+| Speaker Image | ✗ Not permitted |
+| Keywords | Bold and black (must be specified in JSON) |
+| Quotation Styling | Stylized quotation marks |
+
+---
+
+#### Type Template No 29 · Takeaway Plate
+**When to use:** Highlighting a key learning point, conclusion, or a very brief definition.
+
+| Constraint | Rule |
+|------------|------|
+| Heading | ✗ Not permitted |
+| Punctuation | No trailing full stops |
+| Keywords | Bold and highlighted in **red** (must be specified in JSON) |
+| Word limit | Ideally max 14-18 words (longer permitted in OG version) |
+
+---
+
+#### Type Template No 30 · Box Plate (Horizontal)
+**When to use:** Displaying up to four concepts, pillars, categories, or framework elements horizontally side-by-side.
+
+| Constraint | Rule |
+|------------|------|
+| Heading | ALL CAPS, max 32 characters |
+| Subheading | Title Case (in each box) |
+| Sub-pointers | Sentence case; max 5 words per pointer |
+| Boxes limit | Max 4 boxes aligned horizontally |
+
+---
+
+#### Type Template No 31 · Box Plate (Vertical)
+**When to use:** Displaying 2 or 3 vertically stacked boxes where more explanation space is needed per category.
+
+| Constraint | Rule |
+|------------|------|
+| Heading | ALL CAPS, max 32 characters |
+| Subheading | Title Case |
+| Sub-pointers | Sentence case |
+| Boxes limit | Max 3 stacked vertical boxes |
+
+---
+
+#### Type Template No 32 · Fact / Background Plate
+**When to use:** Structured teaching with 4-5 main points and subpointers, or providing historical context, researcher bio, or origin background.
+
+| Constraint | Rule |
+|------------|------|
+| Heading | ALL CAPS, max 32 characters |
+| Subheadings | Mandatory, Title Case (for each main point/fact) |
+| Sub-points | Sentence case (supporting detail/context) |
+| Definitions | ✗ Do not use for pure definitions |
+
+---
+
+#### Type Template No 33 · Fact Plate
+**When to use:** Presenting evidence-based findings, research facts, statistics, or general informational pointers with subpointers.
+
+| Constraint | Rule |
+|------------|------|
+| Heading | ALL CAPS, max 32 characters |
+| Subheadings | Mandatory, Title Case (for each point/fact) |
+| Sub-points | Can have multiple sub-points in sentence case |
+
+---
+
+#### Type Template No 35 · Split-Screen, Glassbox Contrast
+**When to use:** Split-screen layout displaying short statements, keywords, or paired contrasting concepts in glassbox style.
+
+| Constraint | Rule |
+|------------|------|
+| Heading | ALL CAPS |
+| Subheading | Title Case |
+| Description | Sentence case (no header style if only one sentence) |
+
+---
+
+#### Type Template No 36 · Heavy Text Plate
+**When to use:** Detailed explanations, complex academic theories, or policy explanations that cannot be visualised using other templates.
+
+| Constraint | Rule |
+|------------|------|
+| Heading | ALL CAPS, max 32 characters |
+| Subheading | Title Case |
+| Description | Sentence case |
+| Usage rule | Use only as a last resort when other templates are unsuitable |
+
+---
+
+#### Type Template No 40 · Image with Description
+**When to use:** Presentation where a specific case study, historical person, scenario, object, or story is central to the narration.
+
+| Constraint | Rule |
+|------------|------|
+| Heading | ALL CAPS |
+| Description | Sentence case; no trailing periods |
+| Person images | Must include name labels |
+| Right Column | Dedicated case study image area (can use pointers and source tags) |
+
+---
+
+#### Type Template No 41 · Pointers
+**When to use:** Lists of characteristics, benefits, features, or standalone ideas without hierarchical complexity.
+
+| Constraint | Rule |
+|------------|------|
+| Description | Sentence case; max 15 words per pointer |
+| Pointers limit | Max 6 visible pointers before sliding up |
+| Sub-pointers | ✗ Not permitted (strictly flat list) |
+
+---
+
 ### 2.2 Process Templates — Sequences & Steps
 *Use when explaining chronological procedures, workflows, algorithms, or
 cause-and-effect stages.*
@@ -247,6 +423,19 @@ structured details, and multiple bullet points.
 | Points | Unlimited sub-points (previous points slide up) |
 | Icons & Images | ✗ Not permitted |
 | Overflow | > 4 steps → first step slides out |
+
+---
+
+#### Process Template 4 · Split-Screen, Modern Process Flow
+**When to use:** Split-screen layout displaying a sequential process, workflow, or customer journey with step titles (1-5 words) and NO supporting description.
+
+| Constraint | Rule |
+|------------|------|
+| Heading | ALL CAPS |
+| Subheadings | Title Case |
+| Icons | Line icons or numbers required |
+| Limit | Max 5 stages visible at one time (if more, first stage slides out) |
+| Descriptions | ✗ Not permitted |
 
 ---
 
@@ -389,9 +578,25 @@ Use this table for fast first-pass matching before consulting full guidelines.
 | Exactly 2 concepts, graphic too dense for split or explicit full-screen instruction | Type Template No 20 OG *(full-screen — fallback only)* |
 | Exactly 3 concepts, graphic + label only | Type Template No 21 *(split-screen — preferred)* |
 | Exactly 3 concepts, graphic + callouts, too dense for split or explicit full-screen instruction | Type Template No 21 OG *(full-screen — fallback only)* |
+| 5–7 points, brief descriptions (max 10 words), split-screen | Type Template No 22 |
+| Quantitative stats / percentage highlights in a card | Type Template No 24 |
+| Brand/competitor/organization logos grid | Type Template No 25 |
+| Single key question or reflection prompt | Type Template No 26 |
+| Academic concept/term definition + vector illustration | Type Template No 27 |
+| Memorable quote or principle citation | Type Template No 28 |
+| Learning takeaway / short definition (max 14–18 words) | Type Template No 29 |
+| Up to 4 framework pillars horizontally side-by-side | Type Template No 30 |
+| 2–3 stacked vertical boxes with longer description | Type Template No 31 |
+| Detailed topic with 4–5 main points and subpointers, or researcher bio/context | Type Template No 32 |
+| Evidence-based observations/findings with subpointers | Type Template No 33 |
+| Short statements/paired concepts in glassbox style, split-screen | Type Template No 35 |
+| Text-heavy explanation as a last resort | Type Template No 36 |
+| Case study, person scenario, story with main image | Type Template No 40 |
+| Flat list of benefits/features (max 15 words per point) | Type Template No 41 |
 | Simple ordered steps (≤ 4) | Process Template 1 |
 | Multi-stage reasoning, moderate detail | Process Template 2 |
 | Deep technical workflow | Process Template 3 |
+| Ordered steps (titles only, ≤ 5), split-screen | Process Template 4 |
 | Simple side-by-side comparison | Differentiation Template 1 |
 | Brand/case-study comparison with images | Differentiation Template 2 |
 | Short milestones + years only | Timeline Template 1 |
@@ -454,7 +659,7 @@ schema exactly.
 
 | Mistake | Correct Behaviour |
 |---------|------------------|
-| Choosing a template with images for a non-image template | Images only in Differentiation Template 2 and Type Template No 17 |
+| Choosing a template with images for a non-image template | Images only in Differentiation Template 2, Type Template No 17, Type Template No 25, Type Template No 27, and Type Template No 40 |
 | Heading in mixed case | ALL CAPS always for plate headings |
 | Heading exceeding 32 characters | Shorten the title; rephrase if necessary |
 | Selecting Type Template No 21 when sub-bullets exist | Use Type Template No 21 OG instead |
