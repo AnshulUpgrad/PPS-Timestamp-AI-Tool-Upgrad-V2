@@ -41,6 +41,22 @@ os.makedirs(TRANSCRIPTIONS_FOLDER, exist_ok=True)
 
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 app.config['TRANSCRIPTIONS_FOLDER'] = TRANSCRIPTIONS_FOLDER
+app.config['MAX_CONTENT_LENGTH'] = 500 * 1024 * 1024  # 500MB max request size
+
+# Global error handlers — always return JSON so the frontend never gets HTML error pages
+@app.errorhandler(413)
+def request_entity_too_large(e):
+    return jsonify({'error': 'Request payload is too large. Please reduce the number of sentences or file size.'}), 413
+
+@app.errorhandler(500)
+def internal_server_error(e):
+    return jsonify({'error': f'Internal server error: {str(e)}'}), 500
+
+@app.errorhandler(Exception)
+def unhandled_exception(e):
+    import traceback
+    print(f"Unhandled exception:\n{traceback.format_exc()}")
+    return jsonify({'error': f'Unexpected server error: {str(e)}'}), 500
 
 # Configuration Helpers
 def load_prompt_template(filename):
@@ -1001,7 +1017,10 @@ def chunk_sessions():
             i += BATCH_SIZE
             
         try:
-            new_sessions = call_gemini_chunker(batch_to_chunk)
+            try:
+                new_sessions = call_gemini_chunker(batch_to_chunk)
+            except FileNotFoundError as tmpl_err:
+                return jsonify({'error': f'Prompt template file missing on server: {str(tmpl_err)}. Make sure the markdown_files/ directory is present.'}), 500
             sessions.extend(new_sessions)
         except urllib.error.HTTPError as e:
             error_body = e.read().decode('utf-8')
