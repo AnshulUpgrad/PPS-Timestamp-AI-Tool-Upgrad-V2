@@ -25,10 +25,17 @@ app = Flask(__name__)
 # Detect Google Colab environment (checks if /content exists, if Google Drive is mounted, or if Colab env var is set)
 IS_COLAB = os.path.exists('/content') or os.path.exists('/content/drive') or 'google.colab' in sys.modules or os.environ.get('IS_COLAB') == 'true'
 
-# Use local uploads folder for all environments (no Google Drive dependency)
-UPLOAD_FOLDER = os.path.join(os.path.abspath(os.path.dirname(__file__)), 'uploads')
-TRANSCRIPTIONS_FOLDER = os.path.join(os.path.abspath(os.path.dirname(__file__)), 'transcriptions')
-CONFIG_FILE = os.path.join(os.path.abspath(os.path.dirname(__file__)), 'config.json')
+# Use local uploads folder for all environments (use /tmp on Vercel)
+IS_VERCEL = os.environ.get('VERCEL') == '1'
+if IS_VERCEL:
+    base_dir = '/tmp'
+else:
+    base_dir = os.path.abspath(os.path.dirname(__file__))
+
+UPLOAD_FOLDER = os.path.join(base_dir, 'uploads')
+TRANSCRIPTIONS_FOLDER = os.path.join(base_dir, 'transcriptions')
+CONFIG_FILE = os.path.join(base_dir, 'config.json')
+
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 os.makedirs(TRANSCRIPTIONS_FOLDER, exist_ok=True)
 
@@ -86,7 +93,8 @@ def index():
 @app.route('/api/env', methods=['GET'])
 def get_env():
     return jsonify({
-        'is_colab': IS_COLAB
+        'is_colab': IS_COLAB,
+        'is_vercel': IS_VERCEL
     }), 200
 
 @app.route('/api/upload', methods=['POST'])
@@ -186,6 +194,12 @@ def handle_settings():
         'ffmpeg_path': config.get('ffmpeg_path', ''),
         'detected_path': ffmpeg_detected_path,
         'is_valid': ffmpeg_detected_path is not None
+    }), 200
+
+@app.route('/api/config', methods=['GET'])
+def get_app_config():
+    return jsonify({
+        'modal_transcribe_url': os.getenv('MODAL_TRANSCRIBE_URL', '')
     }), 200
 
 @app.route('/api/extract', methods=['POST'])
@@ -345,9 +359,8 @@ def get_whisper_model(model_size):
 
 @app.route('/api/transcribe', methods=['POST'])
 def transcribe_audio():
-    if not HAS_FASTER_WHISPER:
-        return jsonify({'error': 'faster-whisper is not installed or available on this server.'}), 500
-        
+    modal_url = os.getenv('MODAL_TRANSCRIBE_URL')
+    
     data = request.json or {}
     filename = data.get('filename', '')
     model_size = data.get('model_size', 'base')
@@ -362,6 +375,93 @@ def transcribe_audio():
     transcript_filename = f"{filename}.json"
     transcript_path = os.path.join(app.config['TRANSCRIPTIONS_FOLDER'], transcript_filename)
     
+    # Check if we should forward the request to Modal
+    use_modal = os.getenv('USE_MODAL', 'true').lower() == 'true' or modal_url
+    if use_modal:
+        try:
+            print(f"Routing transcription for {filename} to Modal via Python SDK...")
+            import modal
+            
+            with open(audio_path, "rb") as f:
+                file_bytes = f.read()
+                
+            print("Looking up WhisperTranscriber Cls...")
+            # Use the official Class from_name lookup in Modal
+            WhisperTranscriber = modal.Cls.from_name("whisper-transcribe", "WhisperTranscriber")
+            server = WhisperTranscriber()
+            
+            print(f"Calling remote WhisperTranscriber.transcribe method with model_size={model_size}...")
+            transcript_data = server.transcribe.remote(audio_bytes=file_bytes, model_name=model_size, language="auto")
+            
+            with open(transcript_path, 'w', encoding='utf-8') as f:
+                json.dump(transcript_data, f, ensure_ascii=False, indent=2)
+                
+            return jsonify({
+                'message': 'Transcription completed successfully via Modal SDK',
+                'transcript': transcript_data,
+                'transcript_file': transcript_filename
+            }), 200
+        except Exception as e:
+            print(f"Modal native SDK transcription failed: {e}")
+            
+            # Fall back to HTTP post if they still have the FastAPI endpoint deployed (using their modal_url)
+            if modal_url:
+                try:
+                    # Append query parameters for model and language to modal_url
+                    target_url = modal_url
+                    delimiter = '&' if '?' in target_url else '?'
+                    target_url = f"{target_url}{delimiter}model={model_size}&language=auto"
+                    
+                    print(f"Falling back to routing to Modal HTTP endpoint: {target_url}")
+                    import uuid
+                    import urllib.request
+                    
+                    boundary = f"---Boundary-{uuid.uuid4().hex}"
+                    
+                    with open(audio_path, "rb") as f:
+                        file_bytes = f.read()
+                        
+                    parts = [
+                        f"--{boundary}".encode("utf-8"),
+                        f'Content-Disposition: form-data; name="file"; filename="{filename}"'.encode("utf-8"),
+                        b"Content-Type: application/octet-stream",
+                        b"",
+                        file_bytes,
+                        f"--{boundary}--".encode("utf-8")
+                    ]
+                    
+                    body = b"\r\n".join(parts)
+                    
+                    headers = {
+                        "Content-Type": f"multipart/form-data; boundary={boundary}",
+                        "Content-Length": str(len(body))
+                    }
+                    
+                    req = urllib.request.Request(target_url, data=body, headers=headers, method="POST")
+                    with urllib.request.urlopen(req, timeout=600) as response:
+                        transcript_data = json.loads(response.read().decode("utf-8"))
+                    
+                    with open(transcript_path, 'w', encoding='utf-8') as f:
+                        json.dump(transcript_data, f, ensure_ascii=False, indent=2)
+                        
+                    return jsonify({
+                        'message': 'Transcription completed successfully via Modal HTTP fallback',
+                        'transcript': transcript_data,
+                        'transcript_file': transcript_filename
+                    }), 200
+                except Exception as http_e:
+                    print(f"Modal HTTP fallback routing failed: {http_e}")
+                    
+            if not HAS_FASTER_WHISPER:
+                return jsonify({
+                    'error': f'Modal transcription failed and local fallback is not available. SDK Error: {str(e)}'
+                }), 500
+            print("Falling back to local transcription...")
+
+    # Local fallback
+    if not HAS_FASTER_WHISPER:
+        return jsonify({'error': 'faster-whisper is not installed or available on this server.'}), 500
+        
     try:
         model = get_whisper_model(model_size)
         segments, info = model.transcribe(audio_path, beam_size=5, word_timestamps=True)
@@ -409,6 +509,35 @@ def transcribe_audio():
             'error': 'Whisper transcription failed.',
             'details': str(e)
         }), 500
+
+@app.route('/api/save-transcript', methods=['POST'])
+def save_transcript():
+    data = request.json or {}
+    filename = data.get('filename', '')
+    transcript_data = data.get('transcript', {})
+    
+    if not filename or not transcript_data:
+        return jsonify({'error': 'Missing filename or transcript data.'}), 400
+        
+    try:
+        # Create a dummy placeholder in uploads folder so it lists in /api/files
+        dummy_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+        with open(dummy_path, 'w') as f:
+            f.write("")
+            
+        # Save the transcript JSON
+        transcript_filename = f"{filename}.json"
+        transcript_path = os.path.join(app.config['TRANSCRIPTIONS_FOLDER'], transcript_filename)
+        with open(transcript_path, 'w', encoding='utf-8') as f:
+            json.dump(transcript_data, f, ensure_ascii=False, indent=2)
+            
+        return jsonify({
+            'message': 'Transcript saved successfully',
+            'filename': filename,
+            'transcript_file': transcript_filename
+        }), 200
+    except Exception as e:
+        return jsonify({'error': f"Failed to save transcript: {str(e)}"}), 500
 
 @app.route('/api/transcript/<path:filename>', methods=['GET'])
 def get_transcript(filename):
@@ -938,6 +1067,14 @@ def save_chunks(filename):
     deleted_path = os.path.join(app.config['TRANSCRIPTIONS_FOLDER'], deleted_filename)
     
     try:
+        # Check if raw transcript was sent directly (e.g. from serverless Modal flow)
+        raw_transcript = data.get('raw_transcript')
+        if raw_transcript:
+            transcript_filename = f"{filename}.json"
+            transcript_path = os.path.join(app.config['TRANSCRIPTIONS_FOLDER'], transcript_filename)
+            with open(transcript_path, 'w', encoding='utf-8') as f:
+                json.dump(raw_transcript, f, ensure_ascii=False, indent=2)
+
         import datetime
         save_data = {
             'filename': filename,

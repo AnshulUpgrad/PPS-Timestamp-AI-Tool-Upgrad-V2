@@ -60,18 +60,54 @@ function parseQueryParams() {
 // Load sentences and confirmed chunks/sessions
 async function loadWorkspaceData() {
     try {
-        // 1. Fetch sentences
-        const sentResp = await fetch(`/api/sentences/${encodeURIComponent(activeFile)}`);
-        if (!sentResp.ok) throw new Error('Failed to fetch sentences');
-        const sentData = await sentResp.json();
+        // 1. Fetch sentences (reconstructed segment-word structures from Whisper transcript)
+        let sentData;
+        const cachedTranscript = localStorage.getItem('transcript_' + activeFile);
+        
+        if (cachedTranscript) {
+            console.log("Loading sentences from localStorage cached transcript...");
+            const transcript = JSON.parse(cachedTranscript);
+            sentData = {
+                duration: transcript.duration,
+                sentences: splitTranscriptIntoSentences(transcript)
+            };
+        } else {
+            const sentResp = await fetch(`/api/sentences/${encodeURIComponent(activeFile)}`);
+            if (!sentResp.ok) throw new Error('Failed to fetch sentences');
+            sentData = await sentResp.json();
+        }
+        
         sentences = sentData.sentences;
         allSentences = [...sentData.sentences];
         duration = sentData.duration;
         
-        // 2. Fetch sessions
-        const chunkResp = await fetch(`/api/chunks/${encodeURIComponent(activeFile)}`);
-        if (!chunkResp.ok) throw new Error('Failed to load chunks from server');
-        const chunkData = await chunkResp.json();
+        // 2. Fetch sessions chunks from localStorage or server
+        let chunkData = { exists: false };
+        const cachedChunks = localStorage.getItem('chunks_' + activeFile);
+        const cachedDeleted = localStorage.getItem('deleted_' + activeFile);
+        
+        if (cachedChunks) {
+            console.log("Loading chunks from localStorage...");
+            const chunkObj = JSON.parse(cachedChunks);
+            const deletedObj = cachedDeleted ? JSON.parse(cachedDeleted) : { deleted_sentences: [] };
+            chunkData = {
+                exists: true,
+                sessions: chunkObj.sessions,
+                deleted_sentences: deletedObj.deleted_sentences || []
+            };
+        } else {
+            try {
+                const chunkResp = await fetch(`/api/chunks/${encodeURIComponent(activeFile)}`);
+                if (chunkResp.ok) {
+                    const serverChunkData = await chunkResp.json();
+                    if (serverChunkData.exists) {
+                        chunkData = serverChunkData;
+                    }
+                }
+            } catch (e) {
+                console.warn("Failed to fetch chunks from server:", e);
+            }
+        }
         
         if (chunkData.exists && chunkData.sessions && chunkData.sessions.length > 0) {
             sessions = chunkData.sessions;
@@ -1418,6 +1454,10 @@ async function saveKeypointsToServer() {
     btnSaveKeypoints.disabled = true;
     btnSaveKeypoints.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Saving...';
     
+    // Save to localStorage as a primary backup (crucial for stateless environments like Vercel)
+    localStorage.setItem('chunks_' + activeFile, JSON.stringify({ sessions: sessions }));
+    localStorage.setItem('deleted_' + activeFile, JSON.stringify({ deleted_sentences: deletedSentences }));
+    
     try {
         const resp = await fetch(`/api/save-chunks/${encodeURIComponent(activeFile)}`, {
             method: 'POST',
@@ -1434,11 +1474,12 @@ async function saveKeypointsToServer() {
         
         isDirty = false;
         btnSaveKeypoints.disabled = true;
-        alert('Keypoints successfully saved to server!');
+        alert('Keypoints successfully saved!');
     } catch (err) {
         console.error(err);
-        alert('Error saving highlights: ' + err.message);
-        btnSaveKeypoints.disabled = false;
+        isDirty = false;
+        btnSaveKeypoints.disabled = true;
+        alert('Saved successfully to local browser storage!');
     } finally {
         btnSaveKeypoints.innerHTML = '<i class="fa-solid fa-save"></i> Save Changes';
     }
@@ -1591,4 +1632,93 @@ function toggleSlideTextVisibility(index, templateName) {
         if (contentBlock) contentBlock.classList.remove('hidden');
         if (astonBlock) astonBlock.classList.add('hidden');
     }
+}
+
+function splitTranscriptIntoSentences(transcriptData) {
+    const segments = transcriptData.segments || [];
+    const allWords = [];
+    for (const seg of segments) {
+        for (const w of (seg.words || [])) {
+            allWords.push(w);
+        }
+    }
+    
+    if (allWords.length === 0) {
+        const sentences = [];
+        let sentenceId = 0;
+        for (const seg of segments) {
+            const text = (seg.text || '').trim();
+            const parts = text.split(/(?<=[.!?])\s+/);
+            for (const part of parts) {
+                if (part.trim()) {
+                    sentences.push({
+                        id: sentenceId,
+                        text: part.trim(),
+                        start: seg.start || 0.0,
+                        end: seg.end || 0.0,
+                        words: []
+                    });
+                    sentenceId += 1;
+                }
+            }
+        }
+        return sentences;
+    }
+    
+    const sentences = [];
+    let currentWords = [];
+    let sentenceId = 0;
+    
+    const ABBREVIATIONS = new Set([
+        'mr.', 'mrs.', 'ms.', 'dr.', 'prof.', 'sr.', 'jr.', 'vs.', 'etc.', 
+        'eg.', 'ie.', 'a.m.', 'p.m.', 'u.s.', 'u.k.', 'jan.', 'feb.', 
+        'mar.', 'apr.', 'jun.', 'jul.', 'aug.', 'sep.', 'oct.', 'nov.', 'dec.'
+    ]);
+    
+    for (const w of allWords) {
+        currentWords.push(w);
+        const wordText = (w.word || '').trim();
+        
+        let isSentenceEnd = false;
+        if (wordText && ['.', '?', '!'].includes(wordText[wordText.length - 1])) {
+            const cleanWord = wordText.toLowerCase();
+            if (!ABBREVIATIONS.has(cleanWord)) {
+                isSentenceEnd = true;
+            }
+        }
+        
+        if (isSentenceEnd) {
+            const sentenceText = currentWords.map(cw => cw.word || '').join('').trim();
+            sentences.push({
+                id: sentenceId,
+                text: sentenceText,
+                start: currentWords[0].start || 0.0,
+                end: currentWords[currentWords.length - 1].end || 0.0,
+                words: currentWords.map(cw => ({
+                    word: (cw.word || '').trim(),
+                    start: cw.start || 0.0,
+                    end: cw.end || 0.0
+                }))
+            });
+            sentenceId += 1;
+            currentWords = [];
+        }
+    }
+    
+    if (currentWords.length > 0) {
+        const sentenceText = currentWords.map(cw => cw.word || '').join('').trim();
+        sentences.push({
+            id: sentenceId,
+            text: sentenceText,
+            start: currentWords[0].start || 0.0,
+            end: currentWords[currentWords.length - 1].end || 0.0,
+            words: currentWords.map(cw => ({
+                word: (cw.word || '').trim(),
+                start: cw.start || 0.0,
+                end: cw.end || 0.0
+            }))
+        });
+    }
+    
+    return sentences;
 }

@@ -80,9 +80,16 @@
                 </div>
                 
                 <div class="audio-player-container">
-                    <audio id="workspace-audio-player" controls style="width: 100%;">
-                        Your browser does not support the audio element.
-                    </audio>
+                    <div style="display: flex; flex-direction: column; gap: 8px;">
+                        <audio id="workspace-audio-player" controls style="width: 100%;">
+                            Your browser does not support the audio element.
+                        </audio>
+                        <div style="display: flex; justify-content: space-between; align-items: center; padding: 0 4px;">
+                            <span style="font-size: 0.72rem; color: var(--color-text-muted);" id="media-source-label">Source: Server /uploads</span>
+                            <button id="btn-load-local-media" class="btn btn-secondary" style="font-size: 0.65rem; padding: 3px 8px; border-radius: 6px; background: transparent; border: 1px dashed var(--border-color); cursor: pointer;"><i class="fa-solid fa-file-video"></i> Load Local Media</button>
+                            <input type="file" id="local-media-select" class="hidden" accept="audio/*,video/*">
+                        </div>
+                    </div>
                 </div>
 
                 <div class="sentences-list-container" id="sentences-list-wrapper">

@@ -2,7 +2,9 @@
 let selectedVideo = null; // { name, path, size, size_bytes }
 let isProcessing = false;
 let isColabMode = false;
+let isVercelMode = false;
 let fileToUpload = null;
+let modalTranscribeUrl = '';
 
 // DOM Elements - Selection Hero / Details
 const selectHeroContainer = document.getElementById('select-hero-container');
@@ -52,6 +54,7 @@ document.addEventListener('DOMContentLoaded', () => {
     setupEventListeners();
     checkFFmpegStatus();
     loadAudioLibrary();
+    loadAppConfig();
 });
 
 function setupEventListeners() {
@@ -178,16 +181,33 @@ async function checkEnvMode() {
         const resp = await fetch('/api/env');
         const data = await resp.json();
         isColabMode = data.is_colab;
+        isVercelMode = data.is_vercel || false;
         if (isColabMode) {
             writeLog("Colab Mode detected: File browser changed to local desktop upload.");
+        }
+        if (isVercelMode) {
+            writeLog("Vercel Serverless Mode detected: Transcription will bypass local upload limits.");
         }
     } catch (e) {
         console.error("Failed to detect environment mode:", e);
     }
 }
 
+async function loadAppConfig() {
+    try {
+        const resp = await fetch('/api/config');
+        const data = await resp.json();
+        modalTranscribeUrl = data.modal_transcribe_url || '';
+        if (modalTranscribeUrl) {
+            writeLog(`Modal transcription endpoint detected: ${modalTranscribeUrl}`);
+        }
+    } catch (e) {
+        console.error("Failed to load app config:", e);
+    }
+}
+
 function handleBrowseClick(e) {
-    if (isColabMode) {
+    if (isColabMode || isVercelMode) {
         // Synchronously trigger browser file input click to bypass pop-up blocks
         const fileInput = document.getElementById('web-file-input');
         if (fileInput) fileInput.click();
@@ -331,6 +351,11 @@ function escapeHtml(text) {
    NATIVE EXTRACTION WORKFLOW
    ========================================================================== */
 async function runNativeExtraction() {
+    if (isVercelMode && fileToUpload) {
+        await runDirectModalUpload();
+        return;
+    }
+    
     isProcessing = true;
     processBtn.disabled = true;
     changeFileBtn.disabled = true;
@@ -362,20 +387,20 @@ async function runNativeExtraction() {
     writeLog(`Native extraction pipeline started for file: ${selectedVideo.name}`);
 
     try {
-        // --- OPTIONAL UPLOAD STEP FOR COLAB ---
-        if (isColabMode && fileToUpload) {
+        // --- UPLOAD STEP (if file was selected via browser file input) ---
+        if (fileToUpload) {
             updateStepState(stepWasm, 'active');
             const stepWasmTitle = stepWasm.querySelector('.step-title');
             stepWasmTitle.textContent = isAudio ? 'Uploading audio file' : 'Uploading video file';
             
-            writeLog(`Uploading ${isAudio ? 'audio' : 'video'} file to Colab server: ${fileToUpload.name} (${formatBytes(fileToUpload.size)})...`);
+            writeLog(`Uploading ${isAudio ? 'audio' : 'video'} file to server: ${fileToUpload.name} (${formatBytes(fileToUpload.size)})...`);
             
             // Perform the upload with a progress callback
             const uploadResult = await uploadFileWithProgress(fileToUpload, (percent, loaded, total) => {
                 stepWasmDesc.textContent = `${percent}% uploaded (${formatBytes(loaded)} / ${formatBytes(total)})`;
             });
             
-            writeLog(`Upload complete. Saved as ${uploadResult.name} inside container.`);
+            writeLog(`Upload complete. Saved as ${uploadResult.name} on server.`);
             selectedVideo = {
                 name: uploadResult.name,
                 path: uploadResult.path,
@@ -942,4 +967,136 @@ function handleTranscriptSearch(filename, query) {
             span.classList.remove('search-match');
         }
     });
+}
+
+async function runDirectModalUpload() {
+    isProcessing = true;
+    processBtn.disabled = true;
+    changeFileBtn.disabled = true;
+    fileDetails.classList.add('hidden');
+    processingDashboard.classList.remove('hidden');
+    
+    logConsole.classList.remove('hidden');
+    logChevron.classList.add('rotated');
+    
+    const ext = selectedVideo.name.split('.').pop().toLowerCase();
+    const isAudio = ['mp3', 'wav', 'm4a'].includes(ext);
+
+    // Update dynamic titles/labels in UI
+    const processingTitleEl = document.getElementById('processing-title');
+    if (processingTitleEl) {
+        processingTitleEl.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> Transcribing via Modal GPU`;
+    }
+    
+    writeLog(`Vercel mode: Starting direct Modal transcription for file: ${selectedVideo.name}`);
+    
+    updateStepState(stepWasm, 'active');
+    stepWasmDesc.textContent = 'Uploading to GPU...';
+    
+    const modelSize = document.getElementById('pipeline-model-select').value;
+    
+    // Check if modalTranscribeUrl is set
+    if (!modalTranscribeUrl) {
+        writeLog("ERROR: Modal transcription URL is not configured on Vercel environment.");
+        alert("Modal transcription URL is not configured. Please set MODAL_TRANSCRIBE_URL on Vercel.");
+        resetProcessingUI();
+        return;
+    }
+
+    const url = `${modalTranscribeUrl}?model=${modelSize}&language=auto`;
+    writeLog(`Uploading to Modal endpoint: ${url}`);
+    
+    const formData = new FormData();
+    formData.append('file', fileToUpload);
+    
+    const startTime = Date.now();
+    
+    try {
+        // Perform direct upload with progress using XMLHttpRequest wrapped in a Promise
+        const transcribeResult = await new Promise((resolve, reject) => {
+            const xhr = new XMLHttpRequest();
+            xhr.open('POST', url, true);
+            
+            xhr.upload.addEventListener('progress', (e) => {
+                if (e.lengthComputable) {
+                    const percent = Math.round((e.loaded / e.total) * 100);
+                    stepWasmDesc.textContent = `Uploading file: ${percent}%`;
+                }
+            });
+            
+            xhr.onload = () => {
+                if (xhr.status === 200) {
+                    try {
+                        resolve(JSON.parse(xhr.responseText));
+                    } catch (err) {
+                        reject(new Error("Failed to parse transcription response."));
+                    }
+                } else {
+                    reject(new Error(`Modal server returned error status ${xhr.status}: ${xhr.statusText}`));
+                }
+            };
+            
+            xhr.onerror = () => {
+                reject(new Error("Network error uploading to Modal."));
+            };
+            
+            xhr.send(formData);
+        });
+        
+        updateStepState(stepWasm, 'completed');
+        stepWasmDesc.textContent = 'Uploaded';
+        writeLog("Upload to Modal completed. Processing speech-to-text...");
+        
+        updateStepState(stepExtract, 'completed');
+        stepExtractDesc.textContent = 'Bypassed (handled on Modal)';
+        
+        const stepTranscribe = document.getElementById('step-transcribe');
+        const stepTranscribeDesc = document.getElementById('step-transcribe-desc');
+        updateStepState(stepTranscribe, 'active');
+        stepTranscribeDesc.textContent = 'Converting speech to text...';
+        
+        const timeTaken = ((Date.now() - startTime) / 1000).toFixed(1);
+        writeLog(`Modal GPU completed transcription in ${timeTaken} seconds!`);
+        
+        // Save the transcription result back to Vercel session (/tmp)
+        stepTranscribeDesc.textContent = 'Saving transcript...';
+        writeLog("Saving transcript metadata to Vercel session...");
+        
+        const saveResp = await fetch('/api/save-transcript', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                filename: selectedVideo.name,
+                transcript: transcribeResult
+            })
+        });
+        
+        if (!saveResp.ok) {
+            throw new Error(`Failed to save transcript to Vercel session (Status: ${saveResp.status})`);
+        }
+        
+        updateStepState(stepTranscribe, 'completed');
+        stepTranscribeDesc.textContent = `Completed! (${transcribeResult.language.toUpperCase()})`;
+        writeLog(`Speech-to-text successful: saved transcription metadata for ${selectedVideo.name}`);
+        
+        // Refresh library
+        await loadAudioLibrary();
+        
+        resetBtn.classList.remove('hidden');
+        writeLog('Direct Modal pipeline processing completed successfully!');
+        
+    } catch (err) {
+        console.error(err);
+        writeLog(`PIPELINE ERROR: ${err.message}`);
+        updateStepState(stepWasm, 'pending');
+        updateStepState(stepExtract, 'pending');
+        const stepTranscribe = document.getElementById('step-transcribe');
+        updateStepState(stepTranscribe, 'pending');
+        alert(`An error occurred: ${err.message}`);
+        isProcessing = false;
+        processBtn.disabled = false;
+        changeFileBtn.disabled = false;
+        fileDetails.classList.remove('hidden');
+        processingDashboard.classList.add('hidden');
+    }
 }

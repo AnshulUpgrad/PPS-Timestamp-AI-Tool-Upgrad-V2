@@ -1,0 +1,23 @@
+# Vercel Ignore File
+# Exclude heavy local files and folders from the bundle
+
+venv
+.venv
+env
+uploads
+transcriptions
+modal_sample
+PPSimplify_Colab.ipynb
+allguideline.txt
+extra_templates.txt
+test.py
+test_remote.py
+transcribe_modal.py
+.git
+.github
+.idea
+.vscode
+*.pyc
+__pycache__
+.env
+config.json

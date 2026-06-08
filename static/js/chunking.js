@@ -32,6 +32,7 @@ document.addEventListener('DOMContentLoaded', () => {
     initApiKeyField();
     loadFilesDropdown();
     setupEventListeners();
+    setupLocalMediaLoader();
 });
 
 // Load saved API Key from localStorage
@@ -45,12 +46,37 @@ function initApiKeyField() {
 // Fetch all transcribed files to populate select dropdown
 async function loadFilesDropdown() {
     try {
-        const resp = await fetch('/api/files');
-        if (!resp.ok) throw new Error('Failed to load library files');
-        const files = await resp.json();
+        let files = [];
+        
+        // Load Vercel files from localStorage
+        const vercelLib = JSON.parse(localStorage.getItem('vercel_library') || '[]');
+        files = vercelLib.map(file => ({
+            name: file.name,
+            size: file.size,
+            has_transcript: true
+        }));
+        
+        // Try fetching from API
+        try {
+            const resp = await fetch('/api/files');
+            if (resp.ok) {
+                const apiFiles = await resp.json();
+                const fileNames = new Set(files.map(f => f.name));
+                apiFiles.forEach(af => {
+                    if (!fileNames.has(af.name)) {
+                        files.push(af);
+                    }
+                });
+            }
+        } catch (e) {
+            console.warn("Failed to fetch server files:", e);
+        }
         
         // Filter: only show files that have transcripts
         const transcribedFiles = files.filter(f => f.has_transcript);
+        
+        // Clear select list first (keep placeholder)
+        selectFileEl.innerHTML = '<option value="" disabled selected>Select a transcribed file...</option>';
         
         transcribedFiles.forEach(file => {
             const opt = document.createElement('option');
@@ -74,6 +100,30 @@ async function loadFilesDropdown() {
     } catch (err) {
         console.error(err);
         alert('Error loading files in dropdown: ' + err.message);
+    }
+}
+
+function setupLocalMediaLoader() {
+    const btnLoadLocal = document.getElementById('btn-load-local-media');
+    const localMediaSelect = document.getElementById('local-media-select');
+    const mediaSourceLabel = document.getElementById('media-source-label');
+
+    if (btnLoadLocal && localMediaSelect) {
+        btnLoadLocal.addEventListener('click', () => {
+            localMediaSelect.click();
+        });
+
+        localMediaSelect.addEventListener('change', (e) => {
+            const file = e.target.files[0];
+            if (file) {
+                audioPlayer.src = URL.createObjectURL(file);
+                audioPlayer.load();
+                if (mediaSourceLabel) {
+                    mediaSourceLabel.textContent = `Source: Local File (${file.name})`;
+                    mediaSourceLabel.style.color = 'var(--color-success)';
+                }
+            }
+        });
     }
 }
 
@@ -150,23 +200,64 @@ async function handleFileSelection(filename) {
     btnSaveSessions.disabled = true;
     btnConfirmChunks.disabled = true;
     
-    // Set Audio source
-    audioPlayer.src = `/uploads/${filename}`;
+    // Set Audio source (use blob url from vercel_library if found)
+    const vercelLib = JSON.parse(localStorage.getItem('vercel_library') || '[]');
+    const localFile = vercelLib.find(f => f.name === filename);
+    if (localFile && localFile.url && localFile.url.startsWith('blob:')) {
+        audioPlayer.src = localFile.url;
+    } else {
+        audioPlayer.src = `/uploads/${filename}`;
+    }
     audioPlayer.load();
 
     try {
-        // Fetch sentences (reconstructed segment-word structures from Whisper transcript)
-        const sentResp = await fetch(`/api/sentences/${encodeURIComponent(filename)}`);
-        if (!sentResp.ok) throw new Error('Failed to fetch sentence parse');
-        const data = await sentResp.json();
+        let data;
+        const cachedTranscript = localStorage.getItem('transcript_' + filename);
+        
+        if (cachedTranscript) {
+            console.log("Loading sentences from localStorage cached transcript...");
+            const transcript = JSON.parse(cachedTranscript);
+            data = {
+                duration: transcript.duration,
+                sentences: splitTranscriptIntoSentences(transcript)
+            };
+        } else {
+            const sentResp = await fetch(`/api/sentences/${encodeURIComponent(filename)}`);
+            if (!sentResp.ok) throw new Error('Failed to fetch sentence parse');
+            data = await sentResp.json();
+        }
         
         sentences = data.sentences;
         allSentences = [...data.sentences];
         duration = data.duration;
 
-        // Fetch existing sessions chunks from server (if already saved)
-        const chunkResp = await fetch(`/api/chunks/${encodeURIComponent(filename)}`);
-        const chunkData = await chunkResp.json();
+        // Fetch existing sessions chunks from localStorage or server
+        let chunkData = { exists: false };
+        const cachedChunks = localStorage.getItem('chunks_' + filename);
+        const cachedDeleted = localStorage.getItem('deleted_' + filename);
+        
+        if (cachedChunks) {
+            console.log("Loading chunks from localStorage...");
+            const chunkObj = JSON.parse(cachedChunks);
+            const deletedObj = cachedDeleted ? JSON.parse(cachedDeleted) : { deleted_sentences: [] };
+            chunkData = {
+                exists: true,
+                sessions: chunkObj.sessions,
+                deleted_sentences: deletedObj.deleted_sentences || []
+            };
+        } else {
+            try {
+                const chunkResp = await fetch(`/api/chunks/${encodeURIComponent(filename)}`);
+                if (chunkResp.ok) {
+                    const serverChunkData = await chunkResp.json();
+                    if (serverChunkData.exists) {
+                        chunkData = serverChunkData;
+                    }
+                }
+            } catch (e) {
+                console.warn("Failed to fetch chunks from server:", e);
+            }
+        }
         
         if (chunkData.exists) {
             sessions = chunkData.sessions;
@@ -755,6 +846,10 @@ async function saveChunksToServer() {
     btnSaveSessions.disabled = true;
     btnSaveSessions.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Saving...';
     
+    // Save to localStorage as a primary backup (crucial for stateless environments like Vercel)
+    localStorage.setItem('chunks_' + activeFile, JSON.stringify({ sessions: sessions }));
+    localStorage.setItem('deleted_' + activeFile, JSON.stringify({ deleted_sentences: deletedSentences }));
+    
     try {
         const resp = await fetch(`/api/save-chunks/${encodeURIComponent(activeFile)}`, {
             method: 'POST',
@@ -771,11 +866,13 @@ async function saveChunksToServer() {
         
         isDirty = false;
         btnSaveSessions.disabled = true;
-        alert('Chunks successfully saved to server!');
+        alert('Chunks successfully saved!');
     } catch (err) {
         console.error(err);
-        alert('Error saving chunks: ' + err.message);
-        btnSaveSessions.disabled = false;
+        // Bypassed: we are fine on Vercel since we write to localStorage
+        isDirty = false;
+        btnSaveSessions.disabled = true;
+        alert('Saved successfully to local browser storage!');
     } finally {
         btnSaveSessions.innerHTML = '<i class="fa-solid fa-save"></i> Save Changes';
     }
@@ -1266,4 +1363,93 @@ function restoreSentence(sentenceId) {
     renderSentencesList();
     renderSessions();
     renderDeletedSentences();
+}
+
+function splitTranscriptIntoSentences(transcriptData) {
+    const segments = transcriptData.segments || [];
+    const allWords = [];
+    for (const seg of segments) {
+        for (const w of (seg.words || [])) {
+            allWords.push(w);
+        }
+    }
+    
+    if (allWords.length === 0) {
+        const sentences = [];
+        let sentenceId = 0;
+        for (const seg of segments) {
+            const text = (seg.text || '').trim();
+            const parts = text.split(/(?<=[.!?])\s+/);
+            for (const part of parts) {
+                if (part.trim()) {
+                    sentences.push({
+                        id: sentenceId,
+                        text: part.trim(),
+                        start: seg.start || 0.0,
+                        end: seg.end || 0.0,
+                        words: []
+                    });
+                    sentenceId += 1;
+                }
+            }
+        }
+        return sentences;
+    }
+    
+    const sentences = [];
+    let currentWords = [];
+    let sentenceId = 0;
+    
+    const ABBREVIATIONS = new Set([
+        'mr.', 'mrs.', 'ms.', 'dr.', 'prof.', 'sr.', 'jr.', 'vs.', 'etc.', 
+        'eg.', 'ie.', 'a.m.', 'p.m.', 'u.s.', 'u.k.', 'jan.', 'feb.', 
+        'mar.', 'apr.', 'jun.', 'jul.', 'aug.', 'sep.', 'oct.', 'nov.', 'dec.'
+    ]);
+    
+    for (const w of allWords) {
+        currentWords.push(w);
+        const wordText = (w.word || '').trim();
+        
+        let isSentenceEnd = false;
+        if (wordText && ['.', '?', '!'].includes(wordText[wordText.length - 1])) {
+            const cleanWord = wordText.toLowerCase();
+            if (!ABBREVIATIONS.has(cleanWord)) {
+                isSentenceEnd = true;
+            }
+        }
+        
+        if (isSentenceEnd) {
+            const sentenceText = currentWords.map(cw => cw.word || '').join('').trim();
+            sentences.push({
+                id: sentenceId,
+                text: sentenceText,
+                start: currentWords[0].start || 0.0,
+                end: currentWords[currentWords.length - 1].end || 0.0,
+                words: currentWords.map(cw => ({
+                    word: (cw.word || '').trim(),
+                    start: cw.start || 0.0,
+                    end: cw.end || 0.0
+                }))
+            });
+            sentenceId += 1;
+            currentWords = [];
+        }
+    }
+    
+    if (currentWords.length > 0) {
+        const sentenceText = currentWords.map(cw => cw.word || '').join('').trim();
+        sentences.push({
+            id: sentenceId,
+            text: sentenceText,
+            start: currentWords[0].start || 0.0,
+            end: currentWords[currentWords.length - 1].end || 0.0,
+            words: currentWords.map(cw => ({
+                word: (cw.word || '').trim(),
+                start: cw.start || 0.0,
+                end: cw.end || 0.0
+            }))
+        });
+    }
+    
+    return sentences;
 }
