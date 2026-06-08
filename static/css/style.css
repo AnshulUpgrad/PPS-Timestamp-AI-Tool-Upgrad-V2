@@ -1604,6 +1604,10 @@ audio::-webkit-media-controls-time-remaining-display {
     color: white;
     border-color: var(--accent-primary);
 }
+.btn-split-session-here:hover {
+    background: rgba(239, 68, 68, 0.15) !important;
+    border-color: var(--color-danger) !important;
+}
 .workspace-empty {
     display: flex;
     flex-direction: column;
@@ -1783,8 +1787,18 @@ audio::-webkit-media-controls-time-remaining-display {
 .template-item-row {
     display: flex;
     gap: 8px;
-    align-items: center;
+    align-items: flex-start;
     animation: slideUp 0.2s ease-out;
+}
+.template-item-row span {
+    margin-top: 8px;
+}
+.template-item-row .template-item-time-container {
+    margin-top: 2px;
+}
+.template-item-row .btn-delete-item,
+.template-item-row .btn-delete-detail {
+    margin-top: 5px;
 }
 .template-item-label {
     flex: 0 0 120px;
@@ -1837,5 +1851,452 @@ audio::-webkit-media-controls-time-remaining-display {
     box-shadow: 0 0 10px var(--accent-glow);
 }
 
+/* Repeating Chunk Highlight Styles */
+.session-card.repeat-chunk {
+    background: rgba(59, 130, 246, 0.08) !important;
+    border-color: rgba(96, 165, 250, 0.3) !important;
+    box-shadow: 0 0 15px rgba(59, 130, 246, 0.08);
+}
+.session-card.repeat-chunk:hover {
+    border-color: rgba(96, 165, 250, 0.5) !important;
+    background: rgba(59, 130, 246, 0.12) !important;
+}
+.session-card.repeat-chunk .session-card-number {
+    color: #60A5FA !important;
+}
 
+/* Repeating Sentence Highlight Styles */
+.session-sentence-item.repeat-sentence,
+.sentence-subchunk.repeat-sentence {
+    background: rgba(59, 130, 246, 0.06) !important;
+    border-color: rgba(96, 165, 250, 0.25) !important;
+}
+.session-sentence-item.repeat-sentence:hover,
+.sentence-subchunk.repeat-sentence:hover {
+    background: rgba(59, 130, 246, 0.1) !important;
+    border-color: rgba(96, 165, 250, 0.4) !important;
+}
+.session-sentence-item.repeat-sentence .sentence-subchunk-index,
+.sentence-subchunk.repeat-sentence .sentence-subchunk-index {
+    background: rgba(59, 130, 246, 0.2) !important;
+    color: #60A5FA !important;
+    border-color: rgba(96, 165, 250, 0.3) !important;
+}
+
+/* ==========================================================================
+   FULLSCREEN PRESENTATION & SESSION-BY-SESSION LAYOUT
+   ========================================================================== */
+
+/* By default (when headers are visible) */
+.keypoints-page {
+    overflow-y: auto;
+    height: auto;
+}
+
+.keypoints-page .container {
+    max-width: 1600px;
+    width: 96%;
+    padding: 20px 0;
+    margin: 0 auto;
+    display: flex;
+    flex-direction: column;
+    box-sizing: border-box;
+    transition: padding 0.4s cubic-bezier(0.4, 0, 0.2, 1),
+                height 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.keypoints-page .app-header,
+.keypoints-page .config-bar-card {
+    transition: transform 0.4s cubic-bezier(0.4, 0, 0.2, 1),
+                opacity 0.3s ease,
+                height 0.4s cubic-bezier(0.4, 0, 0.2, 1),
+                margin 0.4s cubic-bezier(0.4, 0, 0.2, 1),
+                padding 0.4s cubic-bezier(0.4, 0, 0.2, 1),
+                border-width 0.4s ease;
+    transform-origin: top center;
+    flex-shrink: 0;
+}
+
+/* Collapsed headers state */
+.keypoints-page.collapsed-headers {
+    height: 100vh;
+    overflow: hidden;
+}
+
+.keypoints-page.collapsed-headers .container {
+    height: 100vh;
+    overflow: hidden;
+    padding-top: 10px;
+    padding-bottom: 10px;
+}
+
+.keypoints-page.collapsed-headers .app-header {
+    height: 0;
+    margin: 0 !important;
+    padding: 0 !important;
+    opacity: 0;
+    transform: translateY(-80px) scaleY(0.8);
+    pointer-events: none;
+    overflow: hidden;
+}
+
+.keypoints-page.collapsed-headers .config-bar-card {
+    height: 0;
+    margin: 0 !important;
+    padding: 0 !important;
+    opacity: 0;
+    border-width: 0;
+    transform: translateY(-80px) scaleY(0.8);
+    pointer-events: none;
+    overflow: hidden;
+}
+
+.keypoints-page #keypoints-workspace {
+    flex: 1;
+    display: grid;
+    grid-template-columns: 1fr 1.25fr;
+    gap: 24px;
+    align-items: stretch;
+    height: 750px; /* fixed height when headers are expanded so user can scroll down to collapse */
+    transition: height 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+    margin-bottom: 10px;
+}
+
+.keypoints-page.collapsed-headers #keypoints-workspace {
+    height: calc(100vh - 120px); /* Fill the screen */
+}
+
+.keypoints-page .source-card,
+.keypoints-page .sessions-card {
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    padding: 24px;
+    overflow: hidden;
+}
+
+.keypoints-page .source-card .card-header,
+.keypoints-page .sessions-card .card-header {
+    flex-shrink: 0;
+    margin-bottom: 15px;
+    padding-bottom: 10px;
+}
+
+.keypoints-page .sessions-list-container {
+    flex: 1;
+    height: 0; /* allows flexbox child scrolling */
+    max-height: none !important;
+    overflow: hidden;
+    padding-right: 8px;
+}
+
+/* Hide all sessions by default, only display the active one */
+.keypoints-page .sessions-list-container .session-card {
+    display: none !important;
+}
+
+.keypoints-page .sessions-list-container .session-card.active-session {
+    display: flex !important;
+    flex-direction: column;
+    height: 100%;
+    margin-bottom: 0 !important;
+    animation: scaleIn 0.35s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.keypoints-page .session-card-body {
+    flex: 1;
+    overflow-y: auto;
+    padding-right: 5px;
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+}
+
+/* Subheading text area expansion */
+.keypoints-page .subheading-input {
+    font-size: 1.05rem;
+    color: var(--color-text-primary);
+    line-height: 1.45;
+    min-height: 38px;
+    max-height: 200px;
+    resize: none; /* Resize handled dynamically in JS */
+    border-bottom: 1px dashed rgba(255, 255, 255, 0.15);
+    overflow: hidden;
+    padding: 4px 6px;
+    box-sizing: border-box;
+}
+
+.keypoints-page .subheading-input:focus {
+    border-bottom-color: var(--accent-secondary);
+    border-bottom-style: solid;
+    color: white;
+}
+
+/* Session navigation control bar */
+.session-nav-bar {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 20px;
+    margin-bottom: 20px;
+    background: rgba(255, 255, 255, 0.02);
+    border: 1px solid var(--border-color);
+    padding: 12px 28px;
+    border-radius: 18px;
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
+    flex-shrink: 0;
+    align-self: center;
+    width: auto;
+    min-width: 500px;
+}
+
+.session-nav-info {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+}
+
+.session-nav-indicator {
+    font-family: var(--font-heading);
+    font-size: 1.15rem;
+    font-weight: 700;
+    color: white;
+    min-width: 140px;
+    text-align: center;
+    letter-spacing: -0.5px;
+}
+
+.session-nav-indicator span {
+    color: var(--accent-primary);
+}
+
+.session-nav-btn {
+    width: 38px;
+    height: 38px;
+    border-radius: 10px;
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid var(--border-color);
+    color: white;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    font-size: 0.9rem;
+    transition: var(--transition-smooth);
+}
+
+.session-nav-btn:hover:not(:disabled) {
+    background: var(--accent-primary);
+    border-color: var(--accent-primary);
+    box-shadow: 0 0 15px rgba(99, 102, 241, 0.5);
+    transform: translateY(-2px);
+}
+
+.session-nav-btn:disabled {
+    opacity: 0.25;
+    cursor: not-allowed;
+}
+
+.kbd-hint {
+    font-size: 0.8rem;
+    color: var(--color-text-muted);
+    border-left: 1px solid rgba(255, 255, 255, 0.1);
+    padding-left: 20px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+kbd {
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    border-radius: 6px;
+    padding: 3px 7px;
+    font-family: monospace;
+    font-size: 0.75rem;
+    color: var(--color-text-secondary);
+    box-shadow: 0 2px 0 rgba(0, 0, 0, 0.3);
+}
+
+.session-progress-container {
+    flex: 1;
+    height: 6px;
+    background: rgba(255, 255, 255, 0.05);
+    border-radius: 3px;
+    overflow: hidden;
+    max-width: 150px;
+}
+
+.session-progress-bar {
+    height: 100%;
+    width: 0%;
+    background: linear-gradient(90deg, var(--accent-primary), var(--accent-secondary));
+    border-radius: 3px;
+    transition: width 0.35s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Floating Show Headers Button */
+.btn-show-headers {
+    position: fixed;
+    top: 10px;
+    left: 50%;
+    transform: translateX(-50%) translateY(-50px);
+    z-index: 1000;
+    background: rgba(15, 23, 42, 0.85);
+    border: 1px solid var(--border-color-hover);
+    color: white;
+    width: 40px;
+    height: 30px;
+    border-radius: 15px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    box-shadow: 0 4px 15px rgba(99, 102, 241, 0.2);
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    opacity: 0;
+    pointer-events: none;
+}
+
+.keypoints-page.collapsed-headers .btn-show-headers {
+    transform: translateX(-50%) translateY(0);
+    opacity: 1;
+    pointer-events: auto;
+}
+
+.btn-show-headers:hover {
+    background: var(--accent-primary);
+    box-shadow: 0 0 10px var(--accent-primary);
+}
+
+/* Textarea overrides for visual content details and headings */
+.keypoints-page textarea.template-item-label,
+.keypoints-page textarea.template-item-value,
+.keypoints-page textarea.heading-input,
+.keypoints-page textarea.template-title-input {
+    resize: none;
+    overflow: hidden;
+    line-height: 1.4;
+    box-sizing: border-box;
+}
+
+/* Sentence deletion styling */
+.btn-delete-sentence-left:hover,
+.btn-delete-sentence-right:hover {
+    background: rgba(239, 68, 68, 0.15) !important;
+    border-color: var(--color-danger) !important;
+    color: white !important;
+}
+
+.deleted-sentences-section {
+    margin-top: 24px;
+    border-top: 1px dashed var(--border-color);
+    padding-top: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.deleted-sentences-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.deleted-sentences-header h3 {
+    font-size: 0.8rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: var(--color-text-muted);
+    margin: 0;
+    font-family: var(--font-heading);
+}
+
+#deleted-sentences-wrapper {
+    max-height: 220px;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding-right: 4px;
+}
+
+#deleted-sentences-wrapper::-webkit-scrollbar {
+    width: 4px;
+}
+
+#deleted-sentences-wrapper::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.05);
+    border-radius: 2px;
+}
+
+.deleted-sentence-item {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    background: rgba(239, 68, 68, 0.02);
+    border: 1px dashed rgba(239, 68, 68, 0.15);
+    border-radius: 10px;
+    padding: 8px 12px;
+    font-size: 0.8rem;
+    transition: var(--transition-smooth);
+}
+
+.deleted-sentence-item:hover {
+    background: rgba(239, 68, 68, 0.04);
+    border-color: rgba(239, 68, 68, 0.3);
+}
+
+.deleted-sentence-text {
+    flex: 1;
+    color: var(--color-text-secondary);
+    line-height: 1.4;
+    text-decoration: line-through;
+    text-decoration-color: rgba(239, 68, 68, 0.4);
+    margin-bottom: 2px;
+}
+
+.deleted-sentence-time {
+    font-size: 0.7rem;
+    color: var(--color-danger);
+    font-weight: 600;
+}
+
+.btn-restore-sentence {
+    background: rgba(255, 255, 255, 0.02);
+    border: 1px solid var(--border-color);
+    color: var(--accent-secondary);
+    border-radius: 6px;
+    width: 24px;
+    height: 24px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    font-size: 0.75rem;
+    transition: var(--transition-smooth);
+    margin-top: 1px;
+}
+
+.btn-restore-sentence:hover {
+    background: var(--accent-secondary);
+    color: white;
+    border-color: var(--accent-secondary);
+    box-shadow: 0 0 10px var(--accent-secondary);
+}
+
+.workspace-empty-mini {
+    color: var(--color-text-muted);
+    font-size: 0.8rem;
+    text-align: center;
+    padding: 14px;
+    border: 1px dashed var(--border-color);
+    border-radius: 10px;
+    background: rgba(255, 255, 255, 0.01);
+}
 

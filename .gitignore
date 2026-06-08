@@ -22,3 +22,5 @@ Thumbs.db
 Desktop.ini
 .env
 
+# Transcriptions outputs
+transcriptions/

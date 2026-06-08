@@ -27,10 +27,13 @@ IS_COLAB = os.path.exists('/content') or os.path.exists('/content/drive') or 'go
 
 # Use local uploads folder for all environments (no Google Drive dependency)
 UPLOAD_FOLDER = os.path.join(os.path.abspath(os.path.dirname(__file__)), 'uploads')
+TRANSCRIPTIONS_FOLDER = os.path.join(os.path.abspath(os.path.dirname(__file__)), 'transcriptions')
 CONFIG_FILE = os.path.join(os.path.abspath(os.path.dirname(__file__)), 'config.json')
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
+os.makedirs(TRANSCRIPTIONS_FOLDER, exist_ok=True)
 
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
+app.config['TRANSCRIPTIONS_FOLDER'] = TRANSCRIPTIONS_FOLDER
 
 # Configuration Helpers
 def load_prompt_template(filename):
@@ -314,7 +317,7 @@ def list_files():
                     continue
                 size_mb = os.path.getsize(file_path) / (1024 * 1024)
                 transcript_name = f"{filename}.json"
-                transcript_path = os.path.join(app.config['UPLOAD_FOLDER'], transcript_name)
+                transcript_path = os.path.join(app.config['TRANSCRIPTIONS_FOLDER'], transcript_name)
                 has_transcript = os.path.exists(transcript_path)
                 files.append({
                     'name': filename,
@@ -357,7 +360,7 @@ def transcribe_audio():
         return jsonify({'error': f"Audio file not found: {filename}"}), 400
         
     transcript_filename = f"{filename}.json"
-    transcript_path = os.path.join(app.config['UPLOAD_FOLDER'], transcript_filename)
+    transcript_path = os.path.join(app.config['TRANSCRIPTIONS_FOLDER'], transcript_filename)
     
     try:
         model = get_whisper_model(model_size)
@@ -411,7 +414,7 @@ def transcribe_audio():
 def get_transcript(filename):
     # Retrieve transcript if it exists
     transcript_filename = f"{filename}.json"
-    transcript_path = os.path.join(app.config['UPLOAD_FOLDER'], transcript_filename)
+    transcript_path = os.path.join(app.config['TRANSCRIPTIONS_FOLDER'], transcript_filename)
     
     if os.path.exists(transcript_path) and os.path.isfile(transcript_path):
         try:
@@ -568,13 +571,13 @@ def generate_session_keypoints():
     # Try reading the reinforced visuals guide
     visuals_guide_content = ""
     try:
-        visuals_guide_path = os.path.join(os.path.dirname(__file__), 'reinforced_visuals.md')
+        visuals_guide_path = os.path.join(os.path.dirname(__file__), 'markdown_files', 'reinforced_visuals.md')
         if os.path.exists(visuals_guide_path):
             with open(visuals_guide_path, 'r', encoding='utf-8') as f:
                 visuals_guide_content = f.read()
         else:
             # Fallback to loading Visuals_guide.md if reinforced_visuals.md doesn't exist yet
-            visuals_guide_path_alt = os.path.join(os.path.dirname(__file__), 'Visuals_guide.md')
+            visuals_guide_path_alt = os.path.join(os.path.dirname(__file__), 'markdown_files', 'Visuals_guide.md')
             if os.path.exists(visuals_guide_path_alt):
                 with open(visuals_guide_path_alt, 'r', encoding='utf-8') as f:
                     visuals_guide_content = f.read()
@@ -735,7 +738,7 @@ def generate_session_keypoints():
 @app.route('/api/sentences/<path:filename>', methods=['GET'])
 def get_sentences(filename):
     transcript_filename = f"{filename}.json"
-    transcript_path = os.path.join(app.config['UPLOAD_FOLDER'], transcript_filename)
+    transcript_path = os.path.join(app.config['TRANSCRIPTIONS_FOLDER'], transcript_filename)
     
     if not os.path.exists(transcript_path) or not os.path.isfile(transcript_path):
         return jsonify({'error': f"Transcript file not found for: {filename}"}), 404
@@ -887,15 +890,31 @@ def chunk_sessions():
 @app.route('/api/chunks/<path:filename>', methods=['GET'])
 def get_chunks(filename):
     chunks_filename = f"{filename}_chunks.json"
-    chunks_path = os.path.join(app.config['UPLOAD_FOLDER'], chunks_filename)
+    chunks_path = os.path.join(app.config['TRANSCRIPTIONS_FOLDER'], chunks_filename)
+    
+    deleted_filename = f"{filename}_deleted_sentences.json"
+    deleted_path = os.path.join(app.config['TRANSCRIPTIONS_FOLDER'], deleted_filename)
+    
+    deleted_sentences = []
+    if os.path.exists(deleted_path) and os.path.isfile(deleted_path):
+        try:
+            with open(deleted_path, 'r', encoding='utf-8') as f:
+                del_data = json.load(f)
+                deleted_sentences = del_data.get('deleted_sentences', [])
+        except Exception as e:
+            print(f"Failed to load deleted sentences: {e}")
     
     if os.path.exists(chunks_path) and os.path.isfile(chunks_path):
         try:
             with open(chunks_path, 'r', encoding='utf-8') as f:
                 data = json.load(f)
+            # Fallback to deleted_sentences inside chunks JSON if separate file doesn't exist
+            if not deleted_sentences:
+                deleted_sentences = data.get('deleted_sentences', [])
             return jsonify({
                 'exists': True,
                 'sessions': data.get('sessions', []),
+                'deleted_sentences': deleted_sentences,
                 'updated_at': data.get('updated_at', '')
             }), 200
         except Exception as e:
@@ -910,9 +929,13 @@ def get_chunks(filename):
 def save_chunks(filename):
     data = request.json or {}
     sessions = data.get('sessions', [])
+    deleted_sentences = data.get('deleted_sentences', [])
     
     chunks_filename = f"{filename}_chunks.json"
-    chunks_path = os.path.join(app.config['UPLOAD_FOLDER'], chunks_filename)
+    chunks_path = os.path.join(app.config['TRANSCRIPTIONS_FOLDER'], chunks_filename)
+    
+    deleted_filename = f"{filename}_deleted_sentences.json"
+    deleted_path = os.path.join(app.config['TRANSCRIPTIONS_FOLDER'], deleted_filename)
     
     try:
         import datetime
@@ -924,8 +947,17 @@ def save_chunks(filename):
         with open(chunks_path, 'w', encoding='utf-8') as f:
             json.dump(save_data, f, ensure_ascii=False, indent=2)
             
+        # Save deleted sentences to a separate dedicated JSON file
+        deleted_data = {
+            'filename': filename,
+            'deleted_sentences': deleted_sentences,
+            'updated_at': datetime.datetime.now().isoformat()
+        }
+        with open(deleted_path, 'w', encoding='utf-8') as f:
+            json.dump(deleted_data, f, ensure_ascii=False, indent=2)
+            
         return jsonify({
-            'message': 'Chunks saved successfully',
+            'message': 'Chunks and deleted sentences saved successfully',
             'filename': chunks_filename
         }), 200
     except Exception as e:
@@ -947,11 +979,27 @@ def export_docx(filename):
     data = request.json or {}
     sessions_data = data.get('sessions', [])
     
+    # Pull deleted sentences directly from the separate JSON file on disk
+    deleted_sentences = []
+    deleted_filename = f"{filename}_deleted_sentences.json"
+    deleted_path = os.path.join(app.config['TRANSCRIPTIONS_FOLDER'], deleted_filename)
+    if os.path.exists(deleted_path) and os.path.isfile(deleted_path):
+        try:
+            with open(deleted_path, 'r', encoding='utf-8') as f:
+                del_data = json.load(f)
+                deleted_sentences = del_data.get('deleted_sentences', [])
+        except Exception as e:
+            print(f"Error loading deleted sentences from disk during DOCX export: {e}")
+            
+    # Fallback to payload if file was not found or failed to load
+    if not deleted_sentences:
+        deleted_sentences = data.get('deleted_sentences', [])
+    
     if not sessions_data:
         return jsonify({'error': 'No session data provided for export.'}), 400
         
     # Attempt to load original sentences to construct the transcript text
-    transcript_path = os.path.join(app.config['UPLOAD_FOLDER'], f"{filename}.json")
+    transcript_path = os.path.join(app.config['TRANSCRIPTIONS_FOLDER'], f"{filename}.json")
     sentences_map = {}
     if os.path.exists(transcript_path):
         try:
@@ -994,7 +1042,7 @@ def export_docx(filename):
     def format_seconds(seconds):
         mins = int(seconds // 60)
         secs = int(seconds % 60)
-        return f"{mins:02d}:{secs:02d}"
+        return f"{mins}:{secs:02d}"
 
     # Create document
     doc = Document()
@@ -1052,6 +1100,61 @@ def export_docx(filename):
         set_cell_borders(cell, color="475569") # Slate 600
         cell.width = col_widths[i]
         
+    # Reconstruct original indices for each session to find original boundaries (including deleted sentences)
+    session_original_ranges = []
+    session_original_indices = []
+    for s in sessions_data:
+        session_original_indices.append(list(s.get('sentence_indices', [])))
+        
+    for ds in deleted_sentences:
+        ds_id = ds.get('id')
+        if ds_id is None:
+            continue
+        try:
+            ds_id = int(ds_id)
+        except ValueError:
+            continue
+            
+        inserted = False
+        # 1. Check if it fits inside the active range of any session
+        for indices in session_original_indices:
+            if indices:
+                min_id = min(indices)
+                max_id = max(indices)
+                if min_id <= ds_id <= max_id:
+                    indices.append(ds_id)
+                    inserted = True
+                    break
+                    
+        # 2. Check if it is adjacent to any session
+        if not inserted:
+            for indices in session_original_indices:
+                if indices:
+                    min_id = min(indices)
+                    max_id = max(indices)
+                    if ds_id == max_id + 1 or ds_id == min_id - 1:
+                        indices.append(ds_id)
+                        inserted = True
+                        break
+                        
+        # 3. Fallback to last session
+        if not inserted and session_original_indices:
+            session_original_indices[-1].append(ds_id)
+            
+    # Calculate original start and end times for each session
+    for indices in session_original_indices:
+        indices.sort()
+        orig_start = 0.0
+        orig_end = 0.0
+        if indices and sentences_map:
+            first_sent = sentences_map.get(indices[0])
+            last_sent = sentences_map.get(indices[-1])
+            if first_sent:
+                orig_start = first_sent.get('start', 0.0)
+            if last_sent:
+                orig_end = last_sent.get('end', 0.0)
+        session_original_ranges.append((orig_start, orig_end))
+
     # Populate Rows
     for idx, session in enumerate(sessions_data):
         row = table.add_row()
@@ -1104,6 +1207,15 @@ def export_docx(filename):
             
         first_sub_ts_str = format_seconds(first_sub_ts)
 
+        # Check for deleted sentences falling within this session's original range
+        session_deleted = []
+        orig_start, orig_end = session_original_ranges[idx]
+        for ds in deleted_sentences:
+            ds_start = ds.get('start', 0.0)
+            ds_end = ds.get('end', 0.0)
+            if orig_start - 0.15 <= ds_start <= orig_end + 0.15:
+                session_deleted.append(f"{format_seconds(ds_start)} - {format_seconds(ds_end)}")
+
         # Left Cell Content
         cell_left = row_cells[0]
         p_session = cell_left.paragraphs[0]
@@ -1120,6 +1232,13 @@ def export_docx(filename):
         run_s_ts.font.size = Pt(11)
         run_s_ts.font.bold = False
         run_s_ts.font.color.rgb = RGBColor(30, 41, 59)
+        
+        if session_deleted:
+            run_deleted = p_session.add_run(f" [{', '.join(session_deleted)}]")
+            run_deleted.font.name = 'Calibri'
+            run_deleted.font.size = Pt(10)
+            run_deleted.font.bold = True
+            run_deleted.font.color.rgb = RGBColor(220, 38, 38) # Red 600
         
         p_time = cell_left.add_paragraph()
         p_time.paragraph_format.space_after = Pt(8)
@@ -1193,7 +1312,23 @@ def export_docx(filename):
             run_why_val.font.color.rgb = RGBColor(71, 85, 105) # Slate 600
             
         # Visual Content details (only if template is not Face Only)
-        if template_name != "Face Only" and (v_title or v_items or v_details):
+        if template_name == "Name aston":
+            aston_name = visuals.get('aston_name', '')
+            p_aston = cell_right.add_paragraph()
+            p_aston.paragraph_format.space_before = Pt(6)
+            p_aston.paragraph_format.space_after = Pt(2)
+            run_aston_lbl = p_aston.add_run("Aston Name: ")
+            run_aston_lbl.font.name = 'Calibri'
+            run_aston_lbl.font.size = Pt(9.5)
+            run_aston_lbl.font.bold = True
+            run_aston_lbl.font.color.rgb = RGBColor(71, 85, 105) # Slate 600
+            
+            run_aston_val = p_aston.add_run(aston_name)
+            run_aston_val.font.name = 'Calibri'
+            run_aston_val.font.size = Pt(10)
+            run_aston_val.font.bold = True
+            run_aston_val.font.color.rgb = RGBColor(30, 41, 59) # Slate 800
+        elif template_name != "Face Only" and (v_title or v_items or v_details):
             p_vc_hdr = cell_right.add_paragraph()
             p_vc_hdr.paragraph_format.space_before = Pt(6)
             p_vc_hdr.paragraph_format.space_after = Pt(2)

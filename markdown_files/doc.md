@@ -21,8 +21,15 @@ Heading_Matcher_v2/
 │   └── js/
 │       ├── app.js          # Core frontend controller (pipeline orchestration & player sync)
 │       └── chunking.js     # Chunker state engine, shift boundaries, and Gemini calls
-├── uploads/                # Directory containing extracted audio files, transcripts (*.json), and session files (*_chunks.json)
-└── doc.md                  # This developer documentation file
+├── uploads/                # Directory containing only extracted audio files (e.g. *.m4a)
+├── transcriptions/         # Directory containing transcripts (*.json), session chunks (*_chunks.json), etc.
+└── markdown_files/         # Contains developer docs, visuals guides, and prompts templates
+    ├── doc.md              # This developer documentation file
+    ├── Visuals_guide.md    # Guide for visual layouts
+    ├── reinforced_visuals.md # Updated visuals styling guides
+    ├── keypoints_initial.md  # LLM prompt template for keypoints generation
+    ├── keypoints_refinement.md # LLM prompt template for keypoints refinement
+    └── session_chunking.md   # LLM prompt template for session chunking
 ```
 
 ---
@@ -39,21 +46,21 @@ The backend is built using Flask, running locally on port `5000`.
    * *Mode 2 (MP3 Format)*: Transcodes the audio stream to MP3.
 4. **Local Whisper Transcription**: Utilizes `faster-whisper` for fast inference using CTranslate2.
    * Transcribes audio with `word_timestamps=True` to extract millisecond word ranges.
-   * Saves transcripts locally as `<filename>.json` in the `uploads/` folder.
+   * Saves transcripts locally as `<filename>.json` in the `transcriptions/` folder.
 5. **Sentence-Level Splitting Helper**: Reconstructs complete sentence blocks from Whisper word arrays using punctuation-based regex splits (`.`, `?`, `!`), automatically ignoring common abbreviations (like `Mr.`, `Dr.`, `vs.`, `segment 2`, etc.). It maps the sentence `start` time to the first word's start, and `end` time to the last word's end.
 6. **Gemini Structured Grouping**: Connects to the Gemini API (`gemini-2.5-flash` or `gemini-2.0-flash`) using strict JSON schemas (`responseMimeType: "application/json"`) to partition sentence lists into topical chapters (each containing roughly 4-5 sentences).
-
+ 
 ### API Endpoints
 * `POST /api/select-file`: Triggers native Windows file dialog to select a video.
 * `POST /api/extract`: Runs FFmpeg subprocess to extract audio.
 * `POST /api/transcribe`: Triggers local Whisper model transcription on a specific audio file.
-* `GET /api/transcript/<filename>`: Retrieves the saved transcript JSON.
-* `GET /api/files`: Returns lists of all extracted audio files (and checks whether `<audio_file>.json` transcript exists).
+* `GET /api/transcript/<filename>`: Retrieves the saved transcript JSON from the `transcriptions/` folder.
+* `GET /api/files`: Returns lists of all extracted audio files (and checks whether `<audio_file>.json` transcript exists in `transcriptions/`).
 * `GET /api/settings` & `POST /api/settings`: Validates and saves custom FFmpeg paths in `config.json`.
 * `GET /chunking`: Renders the new Smart Chunker page template.
 * `GET /api/sentences/<filename>`: Extracts and parses sentence subchunks from Whisper transcripts.
 * `POST /api/chunk-sessions`: Accepts sentences list, prompts Gemini API with JSON schema structure, and returns grouped session arrays.
-* `GET /api/chunks/<filename>` & `POST /api/save-chunks/<filename>`: Handles local persistence for the session chunk JSON configurations (`<filename>_chunks.json`).
+* `GET /api/chunks/<filename>` & `POST /api/save-chunks/<filename>`: Handles local persistence for the session chunk JSON configurations (`<filename>_chunks.json` inside the `transcriptions/` folder).
 
 ---
 

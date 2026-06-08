@@ -277,7 +277,7 @@ text callouts or sub-pointer branches on specific concepts.
 
 #### Type Template No 29 · Takeaway Plate
 **When to use:** Highlighting a key learning point, conclusion, or a very brief definition.
-
+**this template does not use a header or title.**
 | Constraint | Rule |
 |------------|------|
 | Heading | ✗ Not permitted |
@@ -561,6 +561,193 @@ This is the **default fallback**. When in doubt, choose Face Only.
 
 ---
 
+### 2.8 Misc Templates
+*Use for specific layout needs such as mind maps, learner progress, soft skills, or outcome importance.*
+
+---
+
+#### Importance Template
+**Purpose:** Used to introduce a module or concept that has 5 or 6 different constituent sessions or subtopics or a topic has 5 to 6 key takeaways such that each is either a title of 5-6 words or is explained in a single sentence of maximum 12 words.
+
+**When to Use:**
+- At the start of a concept/Mind Map.
+- Before introducing a new module or topic with 5-6 component subtopics or types.
+- Summarizing the 5-6 key takeaways from a topic.
+
+**How to Identify This Situation in a Script:**
+Look for:
+- "Why is this topic important?"
+- "In today's workplace..."
+- "This module will help you..."
+- "Understanding this concept will enable you to..."
+- "The importance of learning this topic is..."
+
+**What Appears on Screen:**
+- Main heading.
+- 2–5 importance statements.
+- Short benefit-oriented descriptions (maximum 12 words).
+- Visual emphasis on learner outcomes.
+
+**Do's and Don'ts:**
+- Focus on learner benefits.
+- Focus on practical relevance.
+- Keep statements concise and outcome-focused.
+- Do not explain the entire module.
+- Do not include detailed theory.
+- Heading - ALL CAPS, Description - Sentence case.
+- Description can be a maximum of 2 lines.
+- Word limit: 10–12 words per point.
+- Plate heading should be as short as possible.
+- Heading cannot exceed 2 lines.
+
+| Constraint | Rule |
+|------------|------|
+| Heading | ALL CAPS, max 2 lines, as short as possible |
+| Description / Content | Sentence case, max 2 lines, 10–12 words per point |
+| Statements limit | 2–5 importance statements |
+| Visuals | Focus on learner benefits/outcomes and practical relevance |
+| Theory / Explanations | ✗ Do not explain the entire module or include detailed theory |
+
+**Example Script Cue:**
+"Understanding conflict resolution helps managers improve teamwork, reduce misunderstandings, and improve workplace productivity."
+
+---
+
+#### IMT Mind Map
+**Purpose:** Used to visually show the overall structure of a course or module and how the various topics connect to each other. Acts as a navigation map for the learner.
+
+**When to Use:**
+- Beginning of a module.
+- Beginning of a course.
+- Module overview sections.
+- Learning journey explanations.
+
+**How to Identify This Situation in a Script:**
+Look for:
+- "In this module we will cover..."
+- "The module consists of..."
+- "We will learn about..."
+- "The key topics include..."
+
+**What Appears on Screen:**
+- Central module topic.
+- Connected topic branches.
+- Learning path.
+- Visual topic relationships.
+
+**Do's and Don'ts:**
+- Use only for module mapping.
+- Keep text concise.
+- Show logical relationships between topics.
+- Focus on learning structure.
+- Do not use for detailed content explanations.
+- Do not overload with excessive text.
+- Circle should not contain text.
+- Main heading should appear at the top in FULL CAPS.
+- Used across all courses.
+- Can be revisited during module summaries.
+
+| Constraint | Rule |
+|------------|------|
+| Heading | FULL CAPS, at the top |
+| Text | Concise, focus on learning structure |
+| Circles | ✗ Should not contain text |
+| Layout | Central module topic with connected branches showing relationships |
+| Usage | Only for module mapping; do not use for detailed content explanations or overload with excessive text |
+
+**Example Script Cue:**
+"In this module we will study conflict styles, conflict assessment, negotiation, and resolution strategies."
+
+---
+
+#### NMIMS Mind Map
+**Purpose:** Used to visually map module structure while also showing learner progress and learning outcomes. Designed specifically for NMIMS courses.
+
+**When to Use:**
+- Module introductions.
+- Module overview videos.
+- Learning outcome mapping.
+- Module completion summaries.
+
+**How to Identify This Situation in a Script:**
+Look for:
+- "In this module..."
+- "By the end of this module..."
+- "The learning objectives are..."
+- "We will cover the following topics..."
+
+**What Appears on Screen:**
+- Central module structure.
+- Learning outcomes.
+- Connected topic nodes.
+- Progress indicators.
+- Completed segments turn green as the learner progresses.
+
+**Do's and Don'ts:**
+- Use specifically for NMIMS programs.
+- Focus on learning outcomes.
+- Show module progression clearly.
+- Keep text concise.
+- Do not overload the map with detailed explanations.
+- Do not use for concept teaching.
+- Should clearly communicate learning outcomes.
+- Should visually connect module introduction and module summary.
+- Completed segments should visually indicate progress.
+
+| Constraint | Rule |
+|------------|------|
+| Text | Concise, focus on learning outcomes, clearly communicating them |
+| Layout | Central module structure, connected topic nodes, progress indicators |
+| Interactive Visuals | Completed segments turn green to indicate progress |
+| Usage | NMIMS programs only; do not overload with details or use for concept teaching |
+
+**Example Script Cue:**
+"By the end of this module, you will be able to identify conflict styles, assess conflict situations, and choose appropriate resolution strategies."
+
+---
+
+#### Soft Skills Template
+**Purpose:** Used to display short and simple 1-2 liner concepts, takeaways, learning summaries, communication principles, insights, or key messages in a clean and simple visual format not emphasizing it so much **this template does not use a header or title**. Maximum 15 words.
+
+**When to Use:**
+- Short conceptual explanations (maximum 15 words).
+- An insight.
+- A short learning takeaway or definition.
+- A small supporting example/fact (maximum 15 words).
+
+**How to Identify This Situation in a Script:**
+Look for:
+- "Good communication involves..."
+- "Effective leaders..."
+- "Coaches should..."
+- "Trust develops when..."
+
+**What Appears on Screen:**
+- Main concept.
+- Short supporting description.
+- Simple visual treatment.
+- Minimal text.
+
+**Do's and Don'ts:**
+- Use for short soft-skills concepts.
+- Keep messaging concise.
+- Focus on behavioural learning.
+- Do not use for detailed frameworks.
+- Do not use for long explanations.
+- Text Description - Sentence case.
+- Maximum 2 sentences (maximum 15 words).
+
+| Constraint | Rule |
+|------------|------|
+| Description | Sentence case, max 2 sentences, max 15 words total |
+| Visuals | Simple visual treatment, minimal text |
+| Usage | Soft-skills concepts only; do not use for detailed frameworks or long explanations |
+
+**Example Script Cue:**
+"Trust is built through consistency, transparency, and genuine concern for others."
+
+---
+
 ## 3. Template Quick-Selection Reference
 
 Use this table for fast first-pass matching before consulting full guidelines.
@@ -605,6 +792,10 @@ Use this table for fast first-pass matching before consulting full guidelines.
 | Explicit numeric data — trend over time | Graph Template 1 |
 | Explicit numeric data — category comparison | Graph Template 2 |
 | Explicit numeric data — proportions (sum = 100%) | Graph Template 3 |
+| 5–6 key takeaways or subtopics, intro/benefits, outcome emphasis | Importance Template |
+| Course/module structure overview or learning journey map | IMT Mind Map |
+| Module structure mapping showing progress & outcomes (NMIMS) | NMIMS Mind Map |
+| Short soft-skills concept, insight, takeaway (max 15 words) | Soft Skills Template |
 
 ---
 
@@ -673,3 +864,4 @@ schema exactly.
 | Content block with no subheading (non-Face-Only template) | Every block of generated text must have a subheading — add one; this rule has no exceptions outside Face Only |
 | Using Differentiation Template for sequential or causal content | If content has order, flow, or cause-and-effect (e.g. intention → impact, action → reaction), use a Process Template instead |
 | Using Differentiation Template for more than 2 things | Differentiation is strictly 2-vs-2; for 3+ items use a Type Template |
+| Adding Heading in Template 29| Leave the heading section blank or do not generate a heading at all|

@@ -18,16 +18,79 @@ These rules take priority over the sentence count target. A clean topic boundary
 ### Rule 1 — Never Cut Mid-Topic
 A session boundary must **never** fall in the middle of an explanation. If the speaker is mid-way through describing a concept, process, list, or comparison, all sentences belonging to that explanation must stay in the same session — even if it means the session runs to 6 sentences.
 
-### Rule 2 — Detect Natural Topic Boundaries
-Place session boundaries only at genuine transitions, identified by one or more of these signals:
+# Rule 2 — Detect Natural Topic Boundaries
+
+Create a new session only when the speaker begins a **new conversational objective**. A boundary exists when the upcoming content would be easier to understand if treated as a separate section rather than a continuation of the previous one.
+
+Look for one or more of the following signals:
 
 | Signal Type | Examples |
-|-------------|----------|
+|------------|----------|
 | **Explicit transition phrase** | "Now let's talk about…", "Moving on to…", "The next point is…", "So that covers X, now…" |
-| **Shift in subject** | Speaker finishes discussing Concept A and begins Concept B with no continuation |
+| **Shift in subject** | Speaker finishes Concept A and begins Concept B with no direct continuation |
+| **Shift in purpose/objective** | Explaining a concept → introducing a framework, discussing a problem → presenting solutions |
 | **Shift in mode** | Narrative → definition, definition → example, example → comparison |
 | **Enumeration start/end** | Speaker completes a numbered or bulleted list before introducing the next idea |
 | **Conclusion + new opening** | A summarising sentence followed by an introductory sentence on a new topic |
+| **Question-driven pivot** | "Why does this matter?" → explanation, "How do we solve this?" → methodology |
+| **Perspective change** | Internal factors → external factors, individual level → organizational level, theory → application |
+| **Framework introduction** | Speaker stops discussing a topic and begins introducing a model, process, framework, or course structure |
+| **Time/context shift** | Historical background → present state, current situation → future outlook |
+
+## Additional Guidance
+
+### Do NOT create a boundary merely because:
+- A paragraph ends.
+- A pause occurs.
+- A new sentence starts.
+- New supporting details are introduced for the same core idea.
+- Examples, elaborations, or evidence are added to an ongoing discussion.
+- The speaker restates or reinforces the current point.
+
+### Create a boundary when:
+- The next segment answers a different question than the previous segment.
+- The speaker's primary objective changes.
+- A new framework, model, process, or methodology is introduced.
+- The speaker begins discussing a different concept that could reasonably have its own heading.
+- A viewer could reasonably assign a different title to the upcoming segment.
+
+## Mental Model
+
+When deciding whether to split, ask:
+
+> "If I had to give the previous content and the upcoming content separate section titles, would those titles be meaningfully different?"
+
+If **yes**, create a boundary.
+
+If **no**, keep the content together.
+
+## Example
+
+### Input
+
+Organizations must effectively diagnose through evidence-based management practices and real-time data. They must understand where and how they can improve from top to bottom. They must continuously manage change and alignment of organizational behavior.
+
+Let's now look at how we will frame OB and OD as a change process throughout the course. Organizations today face external pressures like globalization, technology, and competition, along with internal pressures such as strategy shifts and performance gaps.
+
+### Boundary Decision
+
+**Create a boundary before:**
+
+> "Let's now look at how we will frame OB and OD as a change process throughout the course."
+
+### Reason
+
+The speaker shifts from:
+
+- Discussing organizational diagnosis and improvement
+- To introducing the course framework and upcoming structure
+
+This is both:
+- An **explicit transition phrase**
+- A **change in conversational objective**
+- A **framework introduction**
+
+Therefore, it should begin a new session.
 
 ### Rule 3 — Keep Visual Units Together
 Each session will later be mapped to a single visual template (Type, Process, Differentiation, Timeline, Hierarchy, Graph, or Face Only). To ensure a clean template match:

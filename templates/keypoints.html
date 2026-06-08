@@ -13,7 +13,11 @@
     <!-- Custom styling -->
     <link rel="stylesheet" href="/static/css/style.css">
 </head>
-<body>
+<body class="keypoints-page">
+    <!-- Floating Show Headers Button -->
+    <button class="btn-show-headers" id="btn-show-headers" title="Show Header Controls">
+        <i class="fa-solid fa-chevron-down"></i>
+    </button>
     <div class="bg-glow bg-glow-1"></div>
     <div class="bg-glow bg-glow-2"></div>
 
@@ -68,6 +72,27 @@
             </div>
         </div>
 
+        <!-- Session Navigation Bar -->
+        <div class="session-nav-bar">
+            <div class="session-nav-info">
+                <button class="session-nav-btn" id="btn-prev-session" disabled title="Previous Session (Up Arrow)">
+                    <i class="fa-solid fa-chevron-up"></i>
+                </button>
+                <div class="session-nav-indicator">
+                    Session <span id="current-session-num">1</span> of <span id="total-sessions-num">1</span>
+                </div>
+                <button class="session-nav-btn" id="btn-next-session" disabled title="Next Session (Down Arrow)">
+                    <i class="fa-solid fa-chevron-down"></i>
+                </button>
+            </div>
+            <div class="session-progress-container">
+                <div class="session-progress-bar" id="session-progress-bar"></div>
+            </div>
+            <div class="kbd-hint">
+                <kbd>↑</kbd> / <kbd>↓</kbd> Arrow Keys to Navigate
+            </div>
+        </div>
+
         <!-- Main Workspace Grid -->
         <div id="keypoints-workspace" class="workspace-grid">
             <!-- Left Side: Read-Only Chunks/Sessions -->
@@ -76,7 +101,7 @@
                     <h2><i class="fa-solid fa-file-audio card-icon"></i>Finalized Chunks</h2>
                     <span class="badge badge-info" id="sessions-count-badge">0 Chunks</span>
                 </div>
-                <div class="sessions-list-container" id="read-only-sessions-wrapper" style="max-height: 700px; padding: 10px 0;">
+                <div class="sessions-list-container" id="read-only-sessions-wrapper">
                     <!-- Read-only sessions will render here -->
                 </div>
             </div>
@@ -98,7 +123,7 @@
                     </div>
                 </div>
 
-                <div class="sessions-list-container" id="keypoints-list-wrapper" style="max-height: 700px;">
+                <div class="sessions-list-container" id="keypoints-list-wrapper">
                     <!-- Dynamic keypoints editor for each session will render here -->
                 </div>
             </div>
