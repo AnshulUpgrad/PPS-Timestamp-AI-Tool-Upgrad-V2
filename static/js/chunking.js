@@ -792,6 +792,24 @@ function markDirty() {
     btnSaveSessions.disabled = false;
 }
 
+async function parseJsonResponse(resp, actionLabel) {
+    const text = await resp.text();
+    try {
+        return JSON.parse(text);
+    } catch (err) {
+        const preview = text.replace(/\s+/g, ' ').trim().slice(0, 180);
+        throw new Error(`${actionLabel} returned ${resp.status} ${resp.statusText || ''} instead of JSON. Response preview: ${preview || '(empty response)'}`);
+    }
+}
+
+function normalizeChunkSessions(rawSessions) {
+    return (rawSessions || []).map((session, index) => ({
+        title: session.title || `Session ${index + 1}`,
+        summary: session.summary || '',
+        sentence_indices: session.sentence_indices || session.indices || []
+    }));
+}
+
 // Call Gemini API to construct sessions
 async function runGeminiChunking() {
     if (!activeFile || sentences.length === 0) return;
@@ -804,26 +822,57 @@ async function runGeminiChunking() {
     btnRun.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Analyzing Content...';
     
     try {
-        const resp = await fetch('/api/chunk-sessions', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'X-Gemini-Key': keyOverride
-            },
-            body: JSON.stringify({
-                sentences: sentences.map(s => ({ id: s.id, text: s.text })),
-                model: model
-            })
-        });
+        const BATCH_SIZE = 40;
+        const sentencePayload = sentences.map(s => ({ id: s.id, text: s.text }));
+        const builtSessions = [];
         
-        const data = await resp.json();
-        
-        if (!resp.ok) {
-            throw new Error(data.error || 'Gemini API processing failed.');
+        for (let i = 0; i < sentencePayload.length; i += BATCH_SIZE) {
+            const currentBatch = sentencePayload.slice(i, i + BATCH_SIZE);
+            let batchToChunk = currentBatch;
+            let replaceCount = 0;
+            
+            if (builtSessions.length > 0) {
+                replaceCount = Math.min(2, builtSessions.length);
+                const overlapSessions = builtSessions.slice(-replaceCount);
+                const overlapIds = new Set();
+                overlapSessions.forEach(session => {
+                    (session.sentence_indices || []).forEach(id => overlapIds.add(id));
+                });
+                const overlapSentences = sentencePayload.filter(s => overlapIds.has(s.id));
+                batchToChunk = overlapSentences.concat(currentBatch);
+            }
+            
+            const batchNumber = Math.floor(i / BATCH_SIZE) + 1;
+            const totalBatches = Math.ceil(sentencePayload.length / BATCH_SIZE);
+            btnRun.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> Chunking ${batchNumber}/${totalBatches}...`;
+            
+            const resp = await fetch('/api/chunk-sessions', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-Gemini-Key': keyOverride
+                },
+                body: JSON.stringify({
+                    sentences: batchToChunk,
+                    model: model,
+                    single_batch: true
+                })
+            });
+            
+            const data = await parseJsonResponse(resp, 'Auto-Chunk');
+            
+            if (!resp.ok) {
+                throw new Error(data.error || 'Gemini API processing failed.');
+            }
+            
+            if (replaceCount > 0) {
+                builtSessions.splice(-replaceCount, replaceCount);
+            }
+            builtSessions.push(...normalizeChunkSessions(data.sessions));
         }
 
         // Gemini returns: sessions = [{title, summary, sentence_indices: []}]
-        sessions = data.sessions;
+        sessions = builtSessions;
         
         // Re-render
         renderSessions();

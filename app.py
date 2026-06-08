@@ -906,6 +906,7 @@ def chunk_sessions():
     data = request.json or {}
     sentences = data.get('sentences', [])
     model_name = data.get('model', 'gemini-2.5-flash')
+    single_batch = bool(data.get('single_batch'))
     
     # API key from headers, request body, or environment
     api_key = request.headers.get('X-Gemini-Key') or data.get('api_key') or os.getenv('GEMINI_API_KEY')
@@ -983,6 +984,23 @@ def chunk_sessions():
             raise Exception("Empty response from Gemini API.")
             
         return json.loads(text_response.strip())
+
+    if single_batch:
+        try:
+            try:
+                return jsonify({'sessions': call_gemini_chunker(sentences)}), 200
+            except FileNotFoundError as tmpl_err:
+                return jsonify({'error': f'Prompt template file missing on server: {str(tmpl_err)}. Make sure the markdown_files/ directory is present.'}), 500
+        except urllib.error.HTTPError as e:
+            error_body = e.read().decode('utf-8')
+            try:
+                error_json = json.loads(error_body)
+                error_msg = error_json.get('error', {}).get('message', str(e))
+            except Exception:
+                error_msg = error_body or str(e)
+            return jsonify({'error': f"Gemini API HTTP Error: {error_msg}"}), e.code
+        except Exception as e:
+            return jsonify({'error': f"Failed to run Gemini chunking: {str(e)}"}), 500
         
     i = 0
     total_sentences = len(sentences)
@@ -1583,4 +1601,3 @@ def export_docx(filename):
 if __name__ == '__main__':
     # Disable reloader and debug mode to prevent background process crashes in Google Colab
     app.run(debug=False, host='0.0.0.0', port=5000)
-
