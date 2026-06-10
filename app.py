@@ -65,6 +65,77 @@ def load_prompt_template(filename):
     with open(path, 'r', encoding='utf-8') as f:
         return f.read()
 
+class OpenRouterError(Exception):
+    def __init__(self, message, status_code=500):
+        super().__init__(message)
+        self.status_code = status_code
+
+def call_openrouter_api(model_name, prompt, response_schema=None, api_key=None):
+    import urllib.request
+    import urllib.error
+    import json
+    
+    if not api_key:
+        api_key = os.getenv('OPENROUTER_API_KEY') or os.getenv('GEMINI_API_KEY')
+        
+    if not api_key:
+        raise OpenRouterError("OpenRouter API Key is missing. Please configure OPENROUTER_API_KEY in your environment/UI.", 400)
+        
+    url = "https://openrouter.ai/api/v1/chat/completions"
+    
+    headers = {
+        'Content-Type': 'application/json',
+        'Authorization': f'Bearer {api_key}',
+        'HTTP-Referer': 'https://github.com/AnshulUpgrad/PPS-Timestamp-AI-Tool-Upgrad-V2',
+        'X-Title': 'PPS Timestamp AI Tool'
+    }
+    
+    body = {
+        "model": model_name,
+        "messages": [
+            {
+                "role": "user",
+                "content": prompt
+            }
+        ]
+    }
+    
+    if response_schema:
+        body["response_format"] = {
+            "type": "json_schema",
+            "json_schema": {
+                "name": "structured_response",
+                "strict": True,
+                "schema": response_schema
+            }
+        }
+        
+    req = urllib.request.Request(url, data=json.dumps(body).encode('utf-8'), headers=headers, method='POST')
+    try:
+        with urllib.request.urlopen(req, timeout=180) as response:
+            response_data = json.loads(response.read().decode('utf-8'))
+            
+        choices = response_data.get('choices', [])
+        if not choices:
+            raise OpenRouterError(f"No response choices received from OpenRouter. Response data: {response_data}", 500)
+            
+        text_response = choices[0].get('message', {}).get('content', '')
+        if not text_response:
+            raise OpenRouterError(f"Empty content in OpenRouter response. Response data: {response_data}", 500)
+            
+        return text_response
+    except urllib.error.HTTPError as e:
+        error_body = e.read().decode('utf-8')
+        try:
+            error_json = json.loads(error_body)
+            error_msg = error_json.get('error', {}).get('message', str(e))
+        except Exception:
+            error_msg = error_body or str(e)
+        raise OpenRouterError(f"OpenRouter HTTP Error ({e.code}): {error_msg}", e.code)
+    except Exception as e:
+        raise OpenRouterError(f"OpenRouter API call failed: {str(e)}", 500)
+
+
 def load_config():
     if os.path.exists(CONFIG_FILE):
         try:
@@ -678,13 +749,21 @@ def generate_session_keypoints():
     existing_subheadings = data.get('existing_subheadings', [])
     existing_text_content = data.get('existing_text_content', '')
     existing_visuals = data.get('existing_visuals', None)
-    model_name = data.get('model', 'gemini-2.5-flash')
+    model_name = data.get('model', 'google/gemini-2.5-flash')
     
+    # Normalize model names to OpenRouter IDs
+    if model_name == 'gemini-2.5-flash':
+        model_name = 'google/gemini-2.5-flash'
+    elif model_name == 'gemini-2.5-pro':
+        model_name = 'google/gemini-2.5-pro'
+    elif model_name == 'gemini-2.0-flash':
+        model_name = 'google/gemini-2.0-flash'
+        
     # API key from headers, request body, or environment
-    api_key = request.headers.get('X-Gemini-Key') or data.get('api_key') or os.getenv('GEMINI_API_KEY')
+    api_key = request.headers.get('X-Gemini-Key') or data.get('api_key') or os.getenv('OPENROUTER_API_KEY') or os.getenv('GEMINI_API_KEY')
     
     if not api_key:
-        return jsonify({'error': 'Gemini API Key is missing. Please configure GEMINI_API_KEY in your .env file.'}), 400
+        return jsonify({'error': 'OpenRouter API Key is missing. Please configure OPENROUTER_API_KEY in your .env file.'}), 400
         
     if not sentences:
         return jsonify({'error': 'No sentences provided for generating keypoints.'}), 400
@@ -761,93 +840,72 @@ def generate_session_keypoints():
             visuals_guide_content=visuals_guide_content
         )
 
-    import urllib.request
-    import urllib.error
-    
-    url = f"https://generativelanguage.googleapis.com/v1beta/models/{model_name}:generateContent?key={api_key}"
-    
-    headers = {
-        'Content-Type': 'application/json'
-    }
-    
-    body = {
-        "contents": [
-            {
-                "parts": [
-                    {"text": prompt}
-                ]
-            }
-        ],
-        "generationConfig": {
-            "responseMimeType": "application/json",
-            "responseSchema": {
-                "type": "OBJECT",
+    schema = {
+        "type": "object",
+        "properties": {
+            "heading": {"type": "string"},
+            "subheadings": {
+                "type": "array",
+                "items": {"type": "string"}
+            },
+            "text_content": {"type": "string"},
+            "visuals": {
+                "type": "object",
                 "properties": {
-                    "heading": {"type": "STRING"},
-                    "subheadings": {
-                        "type": "ARRAY",
-                        "items": {"type": "STRING"}
-                    },
-                    "text_content": {"type": "STRING"},
-                    "visuals": {
-                        "type": "OBJECT",
+                    "template_name": {"type": "string"},
+                    "why_chosen": {"type": "string"},
+                    "graphics_required": {"type": "boolean"},
+                    "content": {
+                        "type": "object",
                         "properties": {
-                            "template_name": {"type": "STRING"},
-                            "why_chosen": {"type": "STRING"},
-                            "graphics_required": {"type": "BOOLEAN"},
-                            "content": {
-                                "type": "OBJECT",
-                                "properties": {
-                                    "title": {"type": "STRING"},
-                                    "items": {
-                                        "type": "ARRAY",
-                                        "items": {
-                                            "type": "OBJECT",
-                                            "properties": {
-                                                "value": {"type": "STRING"},
-                                                "timestamp": {"type": "NUMBER"}
-                                            },
-                                            "required": ["value", "timestamp"]
-                                        }
+                            "title": {"type": "string"},
+                            "items": {
+                                "type": "array",
+                                "items": {
+                                    "type": "object",
+                                    "properties": {
+                                        "value": {"type": "string"},
+                                        "timestamp": {"type": "number"}
                                     },
-                                    "details": {
-                                        "type": "ARRAY",
-                                        "items": {
-                                            "type": "OBJECT",
-                                            "properties": {
-                                                "label": {"type": "STRING"},
-                                                "value": {"type": "STRING"},
-                                                "timestamp": {"type": "NUMBER"},
-                                                "extra": {"type": "STRING"}
-                                            },
-                                            "required": ["label", "value", "timestamp"]
-                                        }
-                                    }
-                                },
-                                "required": ["title"]
+                                    "required": ["value", "timestamp"],
+                                    "additionalProperties": False
+                                }
+                            },
+                            "details": {
+                                "type": "array",
+                                "items": {
+                                    "type": "object",
+                                    "properties": {
+                                        "label": {"type": "string"},
+                                        "value": {"type": "string"},
+                                        "timestamp": {"type": "number"},
+                                        "extra": {"type": "string"}
+                                    },
+                                    "required": ["label", "value", "timestamp"],
+                                    "additionalProperties": False
+                                }
                             }
                         },
-                        "required": ["template_name", "why_chosen", "graphics_required", "content"]
+                        "required": ["title"],
+                        "additionalProperties": False
                     }
                 },
-                "required": ["heading", "subheadings", "text_content", "visuals"]
+                "required": ["template_name", "why_chosen", "graphics_required", "content"],
+                "additionalProperties": False
             }
-        }
+        },
+        "required": ["heading", "subheadings", "text_content", "visuals"],
+        "additionalProperties": False
     }
     
     try:
-        req = urllib.request.Request(url, data=json.dumps(body).encode('utf-8'), headers=headers, method='POST')
-        with urllib.request.urlopen(req, timeout=180) as response:
-            response_data = json.loads(response.read().decode('utf-8'))
-            
-        candidates = response_data.get('candidates', [])
-        if not candidates:
-            return jsonify({'error': 'No response candidates received from Gemini API.', 'details': response_data}), 500
-            
-        text_response = candidates[0].get('content', {}).get('parts', [{}])[0].get('text', '')
-        if not text_response:
-            return jsonify({'error': 'Empty response from Gemini API.', 'details': response_data}), 500
-            
+        text_response = call_openrouter_api(
+            model_name=model_name,
+            prompt=prompt,
+            response_schema=schema,
+            api_key=api_key
+        )
+        
         result = json.loads(text_response.strip())
         visuals = result.get('visuals', {})
         template_name = visuals.get('template_name', 'Face Only').strip()
@@ -868,16 +926,10 @@ def generate_session_keypoints():
             'text_content': text_content,
             'visuals': visuals
         }), 200
-    except urllib.error.HTTPError as e:
-        error_body = e.read().decode('utf-8')
-        try:
-            error_json = json.loads(error_body)
-            error_msg = error_json.get('error', {}).get('message', str(e))
-        except Exception:
-            error_msg = error_body or str(e)
-        return jsonify({'error': f"Gemini API HTTP Error: {error_msg}"}), e.code
+    except OpenRouterError as e:
+        return jsonify({'error': str(e)}), e.status_code
     except Exception as e:
-        return jsonify({'error': f"Failed to run Gemini keypoints generation: {str(e)}"}), 500
+        return jsonify({'error': f"Failed to run keypoints generation: {str(e)}"}), 500
 
 
 @app.route('/api/sentences/<path:filename>', methods=['GET'])
@@ -905,14 +957,22 @@ def get_sentences(filename):
 def chunk_sessions():
     data = request.json or {}
     sentences = data.get('sentences', [])
-    model_name = data.get('model', 'gemini-2.5-flash')
+    model_name = data.get('model', 'google/gemini-2.5-flash')
     single_batch = bool(data.get('single_batch'))
     
+    # Normalize model names to OpenRouter IDs
+    if model_name == 'gemini-2.5-flash':
+        model_name = 'google/gemini-2.5-flash'
+    elif model_name == 'gemini-2.5-pro':
+        model_name = 'google/gemini-2.5-pro'
+    elif model_name == 'gemini-2.0-flash':
+        model_name = 'google/gemini-2.0-flash'
+        
     # API key from headers, request body, or environment
-    api_key = request.headers.get('X-Gemini-Key') or data.get('api_key') or os.getenv('GEMINI_API_KEY')
+    api_key = request.headers.get('X-Gemini-Key') or data.get('api_key') or os.getenv('OPENROUTER_API_KEY') or os.getenv('GEMINI_API_KEY')
     
     if not api_key:
-        return jsonify({'error': 'Gemini API Key is missing. Please configure GEMINI_API_KEY in your .env file.'}), 400
+        return jsonify({'error': 'OpenRouter API Key is missing. Please configure OPENROUTER_API_KEY in your .env file.'}), 400
         
     if not sentences:
         return jsonify({'error': 'No sentences provided for chunking.'}), 400
@@ -921,10 +981,7 @@ def chunk_sessions():
     BATCH_SIZE = 40
     sessions = []
     
-    import urllib.request
-    import urllib.error
-    
-    # Helper to chunk a specific batch of sentences using Gemini API
+    # Helper to chunk a specific batch of sentences using OpenRouter API
     def call_gemini_chunker(batch_sentences):
         sentences_str = ""
         for s in batch_sentences:
@@ -938,52 +995,41 @@ def chunk_sessions():
         # Fallback for old templates
         prompt = prompt.replace("from 0 to", f"from {first_idx} to")
         
-        url = f"https://generativelanguage.googleapis.com/v1beta/models/{model_name}:generateContent?key={api_key}"
-        headers = {
-            'Content-Type': 'application/json'
-        }
-        
-        body = {
-            "contents": [
-                {
-                    "parts": [
-                        {"text": prompt}
-                    ]
-                }
-            ],
-            "generationConfig": {
-                "responseMimeType": "application/json",
-                "responseSchema": {
-                    "type": "ARRAY",
+        schema = {
+            "type": "object",
+            "properties": {
+                "sessions": {
+                    "type": "array",
                     "items": {
-                        "type": "OBJECT",
+                        "type": "object",
                         "properties": {
-                            "title": {"type": "STRING"},
-                            "summary": {"type": "STRING"},
+                            "title": {"type": "string"},
+                            "summary": {"type": "string"},
                             "sentence_indices": {
-                                "type": "ARRAY",
-                                "items": {"type": "INTEGER"}
+                                "type": "array",
+                                "items": {"type": "integer"}
                             }
                         },
-                        "required": ["title", "summary", "sentence_indices"]
+                        "required": ["title", "summary", "sentence_indices"],
+                        "additionalProperties": False
                     }
                 }
-            }
+            },
+            "required": ["sessions"],
+            "additionalProperties": False
         }
         
-        req = urllib.request.Request(url, data=json.dumps(body).encode('utf-8'), headers=headers, method='POST')
-        with urllib.request.urlopen(req, timeout=180) as response:
-            response_data = json.loads(response.read().decode('utf-8'))
-            
-        candidates = response_data.get('candidates', [])
-        if not candidates:
-            raise Exception("No response candidates received from Gemini API.")
-            
-        text_response = candidates[0].get('content', {}).get('parts', [{}])[0].get('text', '')
-        if not text_response:
-            raise Exception("Empty response from Gemini API.")
-            
-        return json.loads(text_response.strip())
+        text_response = call_openrouter_api(
+            model_name=model_name,
+            prompt=prompt,
+            response_schema=schema,
+            api_key=api_key
+        )
+        
+        res_data = json.loads(text_response.strip())
+        if isinstance(res_data, dict) and 'sessions' in res_data:
+            return res_data['sessions']
+        return res_data
 
     if single_batch:
         try:
@@ -991,16 +1037,10 @@ def chunk_sessions():
                 return jsonify({'sessions': call_gemini_chunker(sentences)}), 200
             except FileNotFoundError as tmpl_err:
                 return jsonify({'error': f'Prompt template file missing on server: {str(tmpl_err)}. Make sure the markdown_files/ directory is present.'}), 500
-        except urllib.error.HTTPError as e:
-            error_body = e.read().decode('utf-8')
-            try:
-                error_json = json.loads(error_body)
-                error_msg = error_json.get('error', {}).get('message', str(e))
-            except Exception:
-                error_msg = error_body or str(e)
-            return jsonify({'error': f"Gemini API HTTP Error: {error_msg}"}), e.code
+        except OpenRouterError as e:
+            return jsonify({'error': str(e)}), e.status_code
         except Exception as e:
-            return jsonify({'error': f"Failed to run Gemini chunking: {str(e)}"}), 500
+            return jsonify({'error': f"Failed to run chunking: {str(e)}"}), 500
         
     i = 0
     total_sentences = len(sentences)
@@ -1040,16 +1080,10 @@ def chunk_sessions():
             except FileNotFoundError as tmpl_err:
                 return jsonify({'error': f'Prompt template file missing on server: {str(tmpl_err)}. Make sure the markdown_files/ directory is present.'}), 500
             sessions.extend(new_sessions)
-        except urllib.error.HTTPError as e:
-            error_body = e.read().decode('utf-8')
-            try:
-                error_json = json.loads(error_body)
-                error_msg = error_json.get('error', {}).get('message', str(e))
-            except Exception:
-                error_msg = error_body or str(e)
-            return jsonify({'error': f"Gemini API HTTP Error at sentence index {i - BATCH_SIZE}: {error_msg}"}), e.code
+        except OpenRouterError as e:
+            return jsonify({'error': f"OpenRouter Error at sentence index {i - BATCH_SIZE}: {str(e)}"}), e.status_code
         except Exception as e:
-            return jsonify({'error': f"Failed to run Gemini chunking at sentence index {i - BATCH_SIZE}: {str(e)}"}), 500
+            return jsonify({'error': f"Failed to run chunking at sentence index {i - BATCH_SIZE}: {str(e)}"}), 500
             
     return jsonify({'sessions': sessions}), 200
 

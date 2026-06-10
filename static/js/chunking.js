@@ -37,7 +37,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
 // Load saved API Key from localStorage
 function initApiKeyField() {
-    const savedKey = localStorage.getItem('gemini_api_key');
+    const savedKey = localStorage.getItem('openrouter_api_key') || localStorage.getItem('gemini_api_key');
     if (savedKey) {
         apiKeyInput.value = savedKey;
     }
@@ -135,7 +135,7 @@ function setupEventListeners() {
 
     // Save API key on input change
     apiKeyInput.addEventListener('input', (e) => {
-        localStorage.setItem('gemini_api_key', e.target.value.trim());
+        localStorage.setItem('openrouter_api_key', e.target.value.trim());
     });
 
     // Toggle Key visibility

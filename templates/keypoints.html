@@ -28,7 +28,7 @@
                 <i class="fa-solid fa-bolt-lightning logo-icon"></i>
                 <h1>PP<span>Simplify</span></h1>
             </div>
-            <p class="subtitle">Smart Speech segmentation tool powered by Gemini AI</p>
+            <p class="subtitle">Smart Speech segmentation tool powered by OpenRouter</p>
             <nav class="app-nav">
                 <a href="/" class="nav-item"><i class="fa-solid fa-chart-simple"></i> Dashboard</a>
                 <a href="/chunking" class="nav-item"><i class="fa-solid fa-scissors"></i> Smart Chunker</a>
@@ -46,7 +46,7 @@
                     </div>
                 </div>
                 <div class="config-group">
-                    <label class="option-title">Gemini API Key (Optional Override)</label>
+                    <label class="option-title">OpenRouter API Key (Optional Override)</label>
                     <div class="api-key-input-wrapper">
                         <input type="password" id="gemini-api-key-input" placeholder="Server .env key will be used if empty" class="path-input">
                         <button class="btn-toggle-visibility" id="toggle-key-visibility" title="Show/Hide Key">
@@ -55,12 +55,12 @@
                     </div>
                 </div>
                 <div class="config-group">
-                    <label class="option-title">Gemini Model</label>
+                    <label class="option-title">Model</label>
                     <div class="select-wrapper">
                         <select id="gemini-model-select" class="premium-select">
-                            <option value="gemini-2.0-flash" selected>Gemini 2.0 Flash (Recommended)</option>
-                            <option value="gemini-2.5-flash">Gemini 2.5 Flash</option>
-                            <option value="gemini-2.5-pro">Gemini 2.5 Pro</option>
+                            <option value="google/gemini-2.5-flash" selected>Gemini 2.5 Flash (Recommended)</option>
+                            <option value="google/gemini-2.5-pro">Gemini 2.5 Pro</option>
+                            <option value="google/gemini-2.0-flash">Gemini 2.0 Flash</option>
                         </select>
                     </div>
                 </div>
