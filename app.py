@@ -136,6 +136,48 @@ def call_openrouter_api(model_name, prompt, response_schema=None, api_key=None):
         raise OpenRouterError(f"OpenRouter API call failed: {str(e)}", 500)
 
 
+def clean_json_response(text_response):
+    if not text_response:
+        return {}
+    
+    text = text_response.strip()
+    
+    # Remove markdown code blocks if present
+    if text.startswith("```"):
+        # Remove start tag (e.g. ```json or ```)
+        first_nl = text.find("\n")
+        if first_nl != -1:
+            text = text[first_nl:].strip()
+        else:
+            text = text[3:].strip()
+        # Remove end tag (e.g. ```)
+        if text.endswith("```"):
+            text = text[:-3].strip()
+            
+    # Try parsing with strict=True first
+    try:
+        return json.loads(text)
+    except json.JSONDecodeError as e:
+        # Try parsing with strict=False (allows raw newlines/tabs inside strings)
+        try:
+            return json.loads(text, strict=False)
+        except json.JSONDecodeError as e2:
+            print("Failed to parse JSON response from LLM.")
+            print(f"Raw response:\n{text_response}")
+            print(f"Strict parse error: {e}")
+            print(f"Lenient parse error: {e2}")
+            
+            # Try removing trailing commas
+            try:
+                import re
+                cleaned = re.sub(r',\s*([\]}])', r'\1', text)
+                return json.loads(cleaned, strict=False)
+            except Exception:
+                pass
+                
+            raise ValueError(f"JSON Parsing Error: {str(e2)}. Raw output: {text[:300]}")
+
+
 def load_config():
     if os.path.exists(CONFIG_FILE):
         try:
@@ -906,7 +948,7 @@ def generate_session_keypoints():
             api_key=api_key
         )
         
-        result = json.loads(text_response.strip())
+        result = clean_json_response(text_response)
         visuals = result.get('visuals', {})
         template_name = visuals.get('template_name', 'Face Only').strip()
         
@@ -1026,7 +1068,7 @@ def chunk_sessions():
             api_key=api_key
         )
         
-        res_data = json.loads(text_response.strip())
+        res_data = clean_json_response(text_response)
         if isinstance(res_data, dict) and 'sessions' in res_data:
             return res_data['sessions']
         return res_data
