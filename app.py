@@ -9,6 +9,8 @@ import string
 from flask import Flask, render_template, request, jsonify, send_from_directory
 from werkzeug.utils import secure_filename
 from dotenv import load_dotenv
+from pydantic import BaseModel, Field
+from typing import List, Optional, Dict, Any
 
 # Load environment variables
 load_dotenv()
@@ -97,7 +99,8 @@ def call_openrouter_api(model_name, prompt, response_schema=None, api_key=None):
                 "role": "user",
                 "content": prompt
             }
-        ]
+        ],
+        "max_tokens": 4096
     }
     
     if response_schema:
@@ -176,6 +179,43 @@ def clean_json_response(text_response):
                 pass
                 
             raise ValueError(f"JSON Parsing Error: {str(e2)}. Raw output: {text[:300]}")
+
+
+# Pydantic schemas for data validation and constraint enforcement
+class VisualsItem(BaseModel):
+    value: str
+    timestamp: float
+
+class VisualsDetail(BaseModel):
+    label: str
+    value: str
+    timestamp: float
+    extra: Optional[str] = None
+
+class VisualsContent(BaseModel):
+    title: str
+    items: Optional[List[VisualsItem]] = []
+    details: Optional[List[VisualsDetail]] = []
+
+class VisualsData(BaseModel):
+    template_name: str
+    why_chosen: str
+    graphics_required: bool
+    content: VisualsContent
+
+class SessionKeypoints(BaseModel):
+    heading: str
+    subheadings: List[str]
+    text_content: str
+    visuals: VisualsData
+
+class SessionChunk(BaseModel):
+    title: str
+    summary: str
+    sentence_indices: List[int]
+
+class ChunkingResult(BaseModel):
+    sessions: List[SessionChunk]
 
 
 def load_config():
@@ -940,38 +980,50 @@ def generate_session_keypoints():
         "additionalProperties": False
     }
     
-    try:
-        text_response = call_openrouter_api(
-            model_name=model_name,
-            prompt=prompt,
-            response_schema=schema,
-            api_key=api_key
-        )
-        
-        result = clean_json_response(text_response)
-        visuals = result.get('visuals', {})
-        template_name = visuals.get('template_name', 'Face Only').strip()
-        
-        heading = result.get('heading', '')
-        subheadings = result.get('subheadings', [])
-        text_content = result.get('text_content', '')
-        
-        if template_name == 'Face Only':
-            subheadings = []
-            text_content = ''
-            visuals['graphics_required'] = False
-            visuals['content'] = {'title': '', 'items': [], 'details': []}
+    max_retries = 3
+    last_error = None
+    
+    for attempt in range(max_retries):
+        try:
+            text_response = call_openrouter_api(
+                model_name=model_name,
+                prompt=prompt,
+                response_schema=schema,
+                api_key=api_key
+            )
             
-        return jsonify({
-            'heading': heading,
-            'subheadings': subheadings,
-            'text_content': text_content,
-            'visuals': visuals
-        }), 200
-    except OpenRouterError as e:
-        return jsonify({'error': str(e)}), e.status_code
-    except Exception as e:
-        return jsonify({'error': f"Failed to run keypoints generation: {str(e)}"}), 500
+            result = clean_json_response(text_response)
+            
+            # Validate response with Pydantic schema
+            validated_data = SessionKeypoints.model_validate(result)
+            
+            heading = validated_data.heading
+            subheadings = validated_data.subheadings
+            text_content = validated_data.text_content
+            visuals = validated_data.visuals.model_dump()
+            
+            template_name = visuals.get('template_name', 'Face Only').strip()
+            if template_name == 'Face Only':
+                subheadings = []
+                text_content = ''
+                visuals['graphics_required'] = False
+                visuals['content'] = {'title': '', 'items': [], 'details': []}
+                
+            return jsonify({
+                'heading': heading,
+                'subheadings': subheadings,
+                'text_content': text_content,
+                'visuals': visuals
+            }), 200
+        except Exception as e:
+            print(f"Keypoints generation attempt {attempt + 1} failed: {e}")
+            last_error = e
+            import time
+            time.sleep(1)
+            
+    return jsonify({
+        'error': f"Failed to run keypoints generation after {max_retries} attempts. Last error: {str(last_error)}"
+    }), 500
 
 
 @app.route('/api/sentences/<path:filename>', methods=['GET'])
@@ -1061,17 +1113,31 @@ def chunk_sessions():
             "additionalProperties": False
         }
         
-        text_response = call_openrouter_api(
-            model_name=model_name,
-            prompt=prompt,
-            response_schema=schema,
-            api_key=api_key
-        )
+        max_retries = 3
+        last_error = None
         
-        res_data = clean_json_response(text_response)
-        if isinstance(res_data, dict) and 'sessions' in res_data:
-            return res_data['sessions']
-        return res_data
+        for attempt in range(max_retries):
+            try:
+                text_response = call_openrouter_api(
+                    model_name=model_name,
+                    prompt=prompt,
+                    response_schema=schema,
+                    api_key=api_key
+                )
+                
+                res_data = clean_json_response(text_response)
+                
+                # Validate response with Pydantic schema
+                validated_data = ChunkingResult.model_validate(res_data)
+                
+                return [session.model_dump() for session in validated_data.sessions]
+            except Exception as e:
+                print(f"Chunking generation attempt {attempt + 1} failed: {e}")
+                last_error = e
+                import time
+                time.sleep(1)
+                
+        raise last_error
 
     if single_batch:
         try:
