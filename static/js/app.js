@@ -3,6 +3,7 @@ let selectedVideo = null; // { name, path, size, size_bytes }
 let isProcessing = false;
 let isColabMode = false;
 let isVercelMode = false;
+let isCloudMode = false;
 let fileToUpload = null;
 let modalTranscribeUrl = '';
 
@@ -183,11 +184,15 @@ async function checkEnvMode() {
         const data = await resp.json();
         isColabMode = data.is_colab;
         isVercelMode = data.is_vercel || false;
+        isCloudMode = data.is_render || false;
         if (isColabMode) {
             writeLog("Colab Mode detected: File browser changed to local desktop upload.");
         }
         if (isVercelMode) {
             writeLog("Vercel Serverless Mode detected: Transcription will bypass local upload limits.");
+        }
+        if (isCloudMode) {
+            writeLog("Cloud Mode (Render/Linux) detected: File browser changed to local desktop upload.");
         }
     } catch (e) {
         console.error("Failed to detect environment mode:", e);
@@ -208,7 +213,7 @@ async function loadAppConfig() {
 }
 
 function handleBrowseClick(e) {
-    if (isColabMode || isVercelMode) {
+    if (isColabMode || isVercelMode || isCloudMode) {
         // Synchronously trigger browser file input click to bypass pop-up blocks
         const fileInput = document.getElementById('web-file-input');
         if (fileInput) fileInput.click();

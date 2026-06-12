@@ -261,9 +261,11 @@ def index():
 
 @app.route('/api/env', methods=['GET'])
 def get_env():
+    is_render = os.environ.get('RENDER') == 'true' or os.environ.get('RENDER') == '1' or platform.system() != 'Windows'
     return jsonify({
         'is_colab': IS_COLAB,
-        'is_vercel': IS_VERCEL
+        'is_vercel': IS_VERCEL,
+        'is_render': is_render
     }), 200
 
 @app.route('/api/upload', methods=['POST'])
@@ -300,7 +302,7 @@ def upload_file():
 
 @app.route('/api/select-file', methods=['POST'])
 def select_file():
-    if IS_COLAB:
+    if IS_COLAB or os.environ.get('RENDER') == 'true' or platform.system() != 'Windows':
         return jsonify({
             'mode': 'colab'
         }), 200
