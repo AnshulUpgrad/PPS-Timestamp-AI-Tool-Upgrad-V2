@@ -1,0 +1,17 @@
+venv/
+.venv/
+env/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+config.json
+uploads/*
+!uploads/.gitkeep
+transcriptions/*
+!transcriptions/.gitkeep
+.git/
+.vscode/
+.idea/
+.env
+.vercel

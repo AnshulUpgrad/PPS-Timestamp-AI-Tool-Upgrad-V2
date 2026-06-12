@@ -1458,14 +1458,26 @@ async function saveKeypointsToServer() {
     localStorage.setItem('chunks_' + activeFile, JSON.stringify({ sessions: sessions }));
     localStorage.setItem('deleted_' + activeFile, JSON.stringify({ deleted_sentences: deletedSentences }));
     
+    const payload = { 
+        sessions: sessions,
+        deleted_sentences: deletedSentences
+    };
+    
+    // Retrieve transcript from localStorage to enable server self-healing
+    const cachedTranscript = localStorage.getItem('transcript_' + activeFile);
+    if (cachedTranscript) {
+        try {
+            payload.raw_transcript = JSON.parse(cachedTranscript);
+        } catch (e) {
+            console.error("Failed to parse cached transcript for save-chunks payload:", e);
+        }
+    }
+    
     try {
         const resp = await fetch(`/api/save-chunks/${encodeURIComponent(activeFile)}`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ 
-                sessions: sessions,
-                deleted_sentences: deletedSentences
-            })
+            body: JSON.stringify(payload)
         });
         
         const data = await resp.json();
@@ -1536,7 +1548,6 @@ async function exportKeypointsDocx() {
     const originalText = btnExportDocx.innerHTML;
     btnExportDocx.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Exporting...';
 
-    try {
         const payload = {
             deleted_sentences: deletedSentences,
             sessions: sessions.map((s, idx) => {
@@ -1556,6 +1567,16 @@ async function exportKeypointsDocx() {
                 };
             })
         };
+
+        // Retrieve transcript from localStorage to enable stateless DOCX generation if server files are wiped
+        const cachedTranscript = localStorage.getItem('transcript_' + activeFile);
+        if (cachedTranscript) {
+            try {
+                payload.raw_transcript = JSON.parse(cachedTranscript);
+            } catch (e) {
+                console.error("Failed to parse cached transcript for export-docx payload:", e);
+            }
+        }
 
         const response = await fetch(`/api/export-docx/${encodeURIComponent(activeFile)}`, {
             method: 'POST',

@@ -491,6 +491,12 @@ async function runNativeExtraction() {
         }
         
         const transcribeData = await transcribeResp.json();
+        
+        // Cache transcript locally
+        localStorage.setItem('transcript_' + data.filename, JSON.stringify(transcribeData.transcript));
+        // Add to local registry
+        addToLocalRegistry(data.filename, selectedVideo.size);
+        
         updateStepState(stepTranscribe, 'completed');
         stepTranscribeDesc.textContent = `Completed! (${transcribeData.transcript.language.toUpperCase()})`;
         writeLog(`Speech-to-text successful: saved transcription metadata for ${data.filename}`);
@@ -581,10 +587,31 @@ function renderReductionStats(originalSizeBytes, audioSizeBytes) {
    ========================================================================== */
 async function loadAudioLibrary() {
     try {
-        const response = await fetch('/api/files');
-        if (!response.ok) throw new Error('Failed to fetch audio list');
+        let files = [];
+        try {
+            const response = await fetch('/api/files');
+            if (response.ok) {
+                files = await response.json();
+            }
+        } catch (e) {
+            console.warn('Error fetching audio list:', e);
+        }
         
-        const files = await response.json();
+        // Merge with local registry
+        const serverNames = new Set(files.map(f => f.name));
+        const registry = JSON.parse(localStorage.getItem('processed_files_registry') || '[]');
+        
+        registry.forEach(f => {
+            if (!serverNames.has(f.name)) {
+                files.push({
+                    name: f.name,
+                    size: f.size,
+                    url: '#',
+                    has_transcript: true,
+                    is_local_only: true
+                });
+            }
+        });
         
         fileCountBadge.textContent = `${files.length} Files`;
         
@@ -649,6 +676,25 @@ async function loadAudioLibrary() {
                 `;
             }
             
+            let audioPlayerHtml = '';
+            if (file.is_local_only) {
+                audioPlayerHtml = `
+                    <div style="font-size: 0.8rem; color: var(--color-text-muted); padding: 10px; border: 1px dashed var(--border-color); border-radius: 8px; margin: 8px 0; display: flex; align-items: center; gap: 8px;">
+                        <i class="fa-solid fa-triangle-exclamation" style="color: var(--accent-primary)"></i>
+                        Server media is deleted. Playback is available in the Smart Chunker workspace.
+                    </div>
+                `;
+            } else {
+                audioPlayerHtml = `
+                    <div class="audio-player-wrapper">
+                        <audio controls preload="none">
+                            <source src="${file.url}" type="audio/${ext === 'mp3' ? 'mpeg' : (ext === 'wav' ? 'wav' : (ext === 'webm' ? 'webm' : 'mp4'))}">
+                            Your browser does not support the audio element.
+                        </audio>
+                    </div>
+                `;
+            }
+
             item.innerHTML = `
                 <div class="file-item-header">
                     <div class="file-item-details">
@@ -661,20 +707,15 @@ async function loadAudioLibrary() {
                         </div>
                     </div>
                     <div class="file-item-actions">
-                        <button class="btn-icon copy-btn" data-url="${window.location.origin}${file.url}" title="Copy Link">
+                        <button class="btn-icon copy-btn" data-url="${window.location.origin}${file.url}" title="Copy Link" ${file.is_local_only ? 'disabled' : ''}>
                             <i class="fa-solid fa-copy"></i>
                         </button>
-                        <a href="${file.url}" download class="btn-icon" title="Download Audio">
+                        <a href="${file.url}" download class="btn-icon" title="Download Audio" ${file.is_local_only ? 'style="display:none;"' : ''}>
                             <i class="fa-solid fa-download"></i>
                         </a>
                     </div>
                 </div>
-                <div class="audio-player-wrapper">
-                    <audio controls preload="none">
-                        <source src="${file.url}" type="audio/${ext === 'mp3' ? 'mpeg' : (ext === 'wav' ? 'wav' : (ext === 'webm' ? 'webm' : 'mp4'))}">
-                        Your browser does not support the audio element.
-                    </audio>
-                </div>
+                ${audioPlayerHtml}
                 ${transcriptSectionHtml}
             `;
             
@@ -816,6 +857,15 @@ async function fetchAndRenderTranscript(filename) {
     if (!container) return;
     
     try {
+        // Try local storage first
+        const cached = localStorage.getItem('transcript_' + filename);
+        if (cached) {
+            const transcript = JSON.parse(cached);
+            transcriptCache[filename] = transcript;
+            renderTranscriptHtml(filename, transcript);
+            return;
+        }
+        
         const resp = await fetch(`/api/transcript/${encodeURIComponent(filename)}`);
         const data = await resp.json();
         
@@ -825,6 +875,8 @@ async function fetchAndRenderTranscript(filename) {
         }
         
         transcriptCache[filename] = data.transcript;
+        localStorage.setItem('transcript_' + filename, JSON.stringify(data.transcript));
+        addToLocalRegistry(filename, "Unknown Size");
         renderTranscriptHtml(filename, data.transcript);
         
     } catch (err) {
@@ -1062,6 +1114,11 @@ async function runDirectModalUpload() {
         stepTranscribeDesc.textContent = 'Saving transcript...';
         writeLog("Saving transcript metadata to Vercel session...");
         
+        // Cache transcript locally
+        localStorage.setItem('transcript_' + selectedVideo.name, JSON.stringify(transcribeResult));
+        // Add to local registry
+        addToLocalRegistry(selectedVideo.name, selectedVideo.size);
+        
         const saveResp = await fetch('/api/save-transcript', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -1098,5 +1155,26 @@ async function runDirectModalUpload() {
         changeFileBtn.disabled = false;
         fileDetails.classList.remove('hidden');
         processingDashboard.classList.add('hidden');
+    }
+}
+
+/* ==========================================================================
+   LOCAL RESILIENCY REGISTRY & CACHING HELPERS
+   ========================================================================== */
+function addToLocalRegistry(filename, size) {
+    try {
+        let registry = JSON.parse(localStorage.getItem('processed_files_registry') || '[]');
+        if (!registry.some(f => f.name === filename)) {
+            registry.push({
+                name: filename,
+                size: size || "Unknown Size",
+                has_transcript: true,
+                timestamp: Date.now()
+            });
+            localStorage.setItem('processed_files_registry', JSON.stringify(registry));
+            console.log(`Added ${filename} to local registry.`);
+        }
+    } catch (e) {
+        console.error("Failed to update local registry:", e);
     }
 }

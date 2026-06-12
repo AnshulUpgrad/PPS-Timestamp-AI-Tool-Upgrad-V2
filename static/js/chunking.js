@@ -48,9 +48,9 @@ async function loadFilesDropdown() {
     try {
         let files = [];
         
-        // Load Vercel files from localStorage
-        const vercelLib = JSON.parse(localStorage.getItem('vercel_library') || '[]');
-        files = vercelLib.map(file => ({
+        // Load local files from registry in localStorage
+        const registry = JSON.parse(localStorage.getItem('processed_files_registry') || '[]');
+        files = registry.map(file => ({
             name: file.name,
             size: file.size,
             has_transcript: true
@@ -200,8 +200,9 @@ async function handleFileSelection(filename) {
     btnSaveSessions.disabled = true;
     btnConfirmChunks.disabled = true;
     
-    // Set Audio source (use blob url from vercel_library if found)
-    const vercelLib = JSON.parse(localStorage.getItem('vercel_library') || '[]');
+    // Set Audio source (use blob url from local storage libraries if found)
+    const vercelLib = JSON.parse(localStorage.getItem('vercel_library') || '[]')
+        .concat(JSON.parse(localStorage.getItem('processed_files_registry') || '[]'));
     const localFile = vercelLib.find(f => f.name === filename);
     if (localFile && localFile.url && localFile.url.startsWith('blob:')) {
         audioPlayer.src = localFile.url;
@@ -899,14 +900,26 @@ async function saveChunksToServer() {
     localStorage.setItem('chunks_' + activeFile, JSON.stringify({ sessions: sessions }));
     localStorage.setItem('deleted_' + activeFile, JSON.stringify({ deleted_sentences: deletedSentences }));
     
+    const payload = {
+        sessions: sessions,
+        deleted_sentences: deletedSentences
+    };
+    
+    // Retrieve transcript from localStorage to enable server self-healing
+    const cachedTranscript = localStorage.getItem('transcript_' + activeFile);
+    if (cachedTranscript) {
+        try {
+            payload.raw_transcript = JSON.parse(cachedTranscript);
+        } catch (e) {
+            console.error("Failed to parse cached transcript for save-chunks payload:", e);
+        }
+    }
+    
     try {
         const resp = await fetch(`/api/save-chunks/${encodeURIComponent(activeFile)}`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                sessions: sessions,
-                deleted_sentences: deletedSentences
-            })
+            body: JSON.stringify(payload)
         });
         
         const data = await resp.json();
@@ -936,14 +949,26 @@ async function confirmChunksAndNext() {
     btnConfirmChunks.disabled = true;
     btnConfirmChunks.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Confirming...';
     
+    const payload = {
+        sessions: sessions,
+        deleted_sentences: deletedSentences
+    };
+    
+    // Retrieve transcript from localStorage to enable server self-healing
+    const cachedTranscript = localStorage.getItem('transcript_' + activeFile);
+    if (cachedTranscript) {
+        try {
+            payload.raw_transcript = JSON.parse(cachedTranscript);
+        } catch (e) {
+            console.error("Failed to parse cached transcript for save-chunks payload:", e);
+        }
+    }
+    
     try {
         const resp = await fetch(`/api/save-chunks/${encodeURIComponent(activeFile)}`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                sessions: sessions,
-                deleted_sentences: deletedSentences
-            })
+            body: JSON.stringify(payload)
         });
         
         const data = await resp.json();

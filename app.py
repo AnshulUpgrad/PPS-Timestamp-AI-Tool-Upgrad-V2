@@ -1315,16 +1315,23 @@ def export_docx(filename):
         return jsonify({'error': 'No session data provided for export.'}), 400
         
     # Attempt to load original sentences to construct the transcript text
-    transcript_path = os.path.join(app.config['TRANSCRIPTIONS_FOLDER'], f"{filename}.json")
+    t_data = data.get('raw_transcript')
+    if not t_data:
+        transcript_path = os.path.join(app.config['TRANSCRIPTIONS_FOLDER'], f"{filename}.json")
+        if os.path.exists(transcript_path):
+            try:
+                with open(transcript_path, 'r', encoding='utf-8') as f:
+                    t_data = json.load(f)
+            except Exception as e:
+                print(f"Error loading transcript for DOCX from disk: {e}")
+                
     sentences_map = {}
-    if os.path.exists(transcript_path):
+    if t_data:
         try:
-            with open(transcript_path, 'r', encoding='utf-8') as f:
-                t_data = json.load(f)
             sentences_list = split_transcript_into_sentences(t_data)
             sentences_map = {s['id']: s for s in sentences_list}
         except Exception as e:
-            print(f"Error loading transcript for DOCX: {e}")
+            print(f"Error parsing transcript for DOCX: {e}")
 
     # Helper functions for styling
     def set_cell_background(cell, fill_hex):
@@ -1741,5 +1748,6 @@ def export_docx(filename):
     )
 
 if __name__ == '__main__':
+    port = int(os.environ.get('PORT', 5000))
     # Disable reloader and debug mode to prevent background process crashes in Google Colab
-    app.run(debug=False, host='0.0.0.0', port=5000)
+    app.run(debug=False, host='0.0.0.0', port=port)
