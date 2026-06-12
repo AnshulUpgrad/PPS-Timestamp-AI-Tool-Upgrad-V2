@@ -55,6 +55,7 @@ document.addEventListener('DOMContentLoaded', () => {
     checkFFmpegStatus();
     loadAudioLibrary();
     loadAppConfig();
+    initModalCredentialsFields();
 });
 
 function setupEventListeners() {
@@ -475,7 +476,9 @@ async function runNativeExtraction() {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
                 filename: data.filename,
-                model_size: modelSize
+                model_size: modelSize,
+                modal_token_id: (document.getElementById('modal-token-id-input')?.value || '').trim(),
+                modal_token_secret: (document.getElementById('modal-token-secret-input')?.value || '').trim()
             })
         });
         
@@ -791,7 +794,9 @@ async function loadAudioLibrary() {
                             headers: { 'Content-Type': 'application/json' },
                             body: JSON.stringify({
                                 filename: filename,
-                                model_size: inlineModel
+                                model_size: inlineModel,
+                                modal_token_id: (document.getElementById('modal-token-id-input')?.value || '').trim(),
+                                modal_token_secret: (document.getElementById('modal-token-secret-input')?.value || '').trim()
                             })
                         });
                         const resData = await response.json();
@@ -1176,5 +1181,37 @@ function addToLocalRegistry(filename, size) {
         }
     } catch (e) {
         console.error("Failed to update local registry:", e);
+    }
+}
+
+function initModalCredentialsFields() {
+    const tokenIdInput = document.getElementById('modal-token-id-input');
+    const tokenSecretInput = document.getElementById('modal-token-secret-input');
+    const toggleSecretBtn = document.getElementById('toggle-modal-secret');
+    
+    if (tokenIdInput && tokenSecretInput) {
+        tokenIdInput.value = localStorage.getItem('modal_token_id') || '';
+        tokenSecretInput.value = localStorage.getItem('modal_token_secret') || '';
+        
+        tokenIdInput.addEventListener('input', (e) => {
+            localStorage.setItem('modal_token_id', e.target.value.trim());
+        });
+        
+        tokenSecretInput.addEventListener('input', (e) => {
+            localStorage.setItem('modal_token_secret', e.target.value.trim());
+        });
+    }
+    
+    if (toggleSecretBtn && tokenSecretInput) {
+        toggleSecretBtn.addEventListener('click', () => {
+            const icon = toggleSecretBtn.querySelector('i');
+            if (tokenSecretInput.type === 'password') {
+                tokenSecretInput.type = 'text';
+                icon.className = 'fa-solid fa-eye';
+            } else {
+                tokenSecretInput.type = 'password';
+                icon.className = 'fa-solid fa-eye-slash';
+            }
+        });
     }
 }

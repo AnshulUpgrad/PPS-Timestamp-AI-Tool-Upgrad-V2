@@ -32,6 +32,31 @@
             </nav>
         </header>
 
+        <!-- Credentials Configuration Bar -->
+        <div class="card config-bar-card" style="margin-bottom: 24px; padding: 20px;">
+            <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid rgba(255, 255, 255, 0.06); padding-bottom: 10px; margin-bottom: 15px;">
+                <h3 style="font-family: var(--font-heading); font-size: 1rem; margin: 0; color: white; display: flex; align-items: center; gap: 8px;">
+                    <i class="fa-solid fa-key" style="color: var(--accent-primary)"></i> Modal Serverless Credentials (Optional Override)
+                </h3>
+                <span style="font-size: 0.75rem; color: var(--color-text-muted);">Bypasses server .env files for public deployment</span>
+            </div>
+            <div class="config-grid" style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
+                <div class="config-group" style="display: flex; flex-direction: column; gap: 6px;">
+                    <label class="option-title" style="font-size: 0.8rem; font-weight: 600; color: var(--color-text-secondary);">Modal Token ID</label>
+                    <input type="password" id="modal-token-id-input" placeholder="Bypasses .env if filled" class="path-input" style="width: 100%; box-sizing: border-box; background: rgba(255,255,255,0.02); border: 1px solid var(--border-color); color: white; padding: 10px 14px; border-radius: 10px; outline: none; transition: var(--transition-smooth);">
+                </div>
+                <div class="config-group" style="display: flex; flex-direction: column; gap: 6px;">
+                    <label class="option-title" style="font-size: 0.8rem; font-weight: 600; color: var(--color-text-secondary);">Modal Token Secret</label>
+                    <div style="position: relative; width: 100%;">
+                        <input type="password" id="modal-token-secret-input" placeholder="Bypasses .env if filled" class="path-input" style="width: 100%; box-sizing: border-box; background: rgba(255,255,255,0.02); border: 1px solid var(--border-color); color: white; padding: 10px 14px; border-radius: 10px; outline: none; transition: var(--transition-smooth); padding-right: 40px;">
+                        <button type="button" id="toggle-modal-secret" style="position: absolute; right: 12px; top: 50%; transform: translateY(-50%); background: transparent; border: none; color: var(--color-text-muted); cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 0.9rem;">
+                            <i class="fa-solid fa-eye-slash"></i>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
         <!-- Main Dashboard Layout -->
         <div class="dashboard-grid">
             <!-- Left Side: Selection and Extraction -->

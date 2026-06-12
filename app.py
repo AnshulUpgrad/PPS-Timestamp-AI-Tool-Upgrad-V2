@@ -534,6 +534,14 @@ def transcribe_audio():
     filename = data.get('filename', '')
     model_size = data.get('model_size', 'base')
     
+    modal_token_id = data.get('modal_token_id', '').strip()
+    modal_token_secret = data.get('modal_token_secret', '').strip()
+    
+    if modal_token_id:
+        os.environ['MODAL_TOKEN_ID'] = modal_token_id
+    if modal_token_secret:
+        os.environ['MODAL_TOKEN_SECRET'] = modal_token_secret
+        
     if not filename:
         return jsonify({'error': 'Missing filename parameter.'}), 400
         
