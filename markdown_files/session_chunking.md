@@ -4,7 +4,9 @@ You are an AI assistant that partitions a sequence of transcription sentences in
 
 ## Core Constraints
 
-- Each session must contain approximately **2 to 4 sentences** (targeting a duration of 30 seconds to 1 minute of speech). Flex up to 5 sentences only when absolutely necessary to avoid cutting in the middle of a single cohesive sentence or mid-thought, but prefer splitting rather than grouping.
+- **Sentence Count Target**: Each session must contain approximately **2 to 5 sentences** (typically representing 20 to 50 seconds of speech).
+- **Strict Hard Ceiling**: A session must **never** exceed **8 sentences** under any circumstances. If the discussion of a single topic or example runs longer, you **must** partition it into multiple consecutive sessions (e.g., "Topic: Part 1", "Topic: Part 2").
+- **Strict Hard Floor**: A session must contain **at least 2 sentences**, unless a 1-sentence segment is absolutely unavoidable due to surrounding boundaries. Avoid 1-sentence sessions.
 - You must respect the **original chronological order** of sentences. Do not reorder, skip, or duplicate any sentence.
 - Every sentence index from `{first_index}` to `{last_index}` must belong to **exactly one session**.
 - Indices within and across sessions must be **strictly sequential** (e.g. Session 1: [0, 1, 2, 3], Session 2: [4, 5, 6, 7], etc.).
@@ -15,8 +17,12 @@ You are an AI assistant that partitions a sequence of transcription sentences in
 
 These rules take priority over the sentence count target. A clean topic boundary always matters more than hitting exactly 4–5 sentences.
 
-### Rule 1 — Never Cut Mid-Topic (With Precise Micro-Splitting)
-A session boundary must **never** fall in the middle of a single cohesive sentence or mid-thought. However, do NOT group entire multi-stage explanations, examples, or list-items into a single session just because they are connected. Split them into sequential sub-topic sessions to keep each session between 2 to 4 sentences. If the speaker explains a concept and then gives an example, case study, or analogy, you **must** split them: the definition/concept goes into one session, and the example/analogy goes into a separate, consecutive session.
+### Rule 1 — Balanced Sizing & Logical Micro-Splitting
+- A session boundary must **never** fall in the middle of a single cohesive sentence or mid-thought.
+- **Logical Micro-Splitting**: Do NOT group entire multi-stage explanations, examples, or list-items into a single session just because they are connected. Split them into sequential sub-topic sessions to keep each session between 2 to 5 sentences.
+- **Concept vs. Example Split**: If the speaker explains a concept and then gives an example, case study, or analogy, you **must** split them: the definition/concept goes into one session, and the example/analogy goes into a separate, consecutive session.
+- **Immediate Logical Flow (Avoid Over-Splitting)**: Do NOT create a boundary for transitional logical connectors like "So here's why this matters", "Therefore", "As a result", or "This means that" if they immediately follow a core assertion and explain/elaborate on it, *unless* keeping them together would exceed the 8-sentence ceiling. Keep core assertions and their immediate explanatory consequences/justifications in the same session.
+- **Classroom Management & Meta-Chatter**: Do not start or end a session with meta-comments or filler chatter (e.g. "Silence is consent", "Better?", "Segment two", "Is that working?"). Absorb these filler sentences into the preceding or succeeding session, ensuring that new sessions begin exactly where the core lecture topic resumes.
 
 # Rule 2 — Detect Natural Topic Boundaries
 
@@ -44,6 +50,7 @@ Look for one or more of the following signals:
 - A pause occurs.
 - A new sentence starts.
 - The speaker restates or reinforces the current point with simple synonyms/paraphrases within the same 1-2 sentences.
+- A transitional phrase like "So here's why this matters", "Therefore", or "As a result" immediately follows the core assertion (keep them together to prevent over-splitting).
 
 ### Create a boundary when:
 - The next segment answers a different question than the previous segment.
@@ -140,11 +147,17 @@ Before finalising each boundary, run through this checklist:
 5. Does any session contain two clearly distinct topics?
       → If YES: split it at the natural boundary between them.
 
-6. Does this session span more than 4 sentences or combine a concept and its detailed example/application?
-      → If YES: split it so the concept is in one session and the example/application is in the next session.
+6. Does this session exceed 8 sentences or combine a concept and its detailed example?
+      → If YES: split it so the concept is in one session and the example is in the next session, or partition it into Part 1 / Part 2.
 
 7. Does this session contain a multi-point list or sequence where items are discussed in detail?
       → If YES: split the detailed items into their own individual or paired sessions.
+
+8. Does this session contain a transitional phrase (e.g. "So here's why this matters") that is split from its preceding assertion?
+      → If YES: merge them back into a single session, provided it stays under the 8-sentence ceiling.
+
+9. Does a session begin or end with meta-chatter/filler (e.g. "Better?", "Segment two")?
+      → If YES: re-assign those filler sentences to keep topic boundaries clean and aligned with the actual lecture start.
 ```
 
 ---
