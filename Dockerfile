@@ -25,5 +25,5 @@ COPY . /app/
 # Expose default Render port
 EXPOSE 10000
 
-# Run the application using gunicorn dynamically binding to the PORT env variable
-CMD ["sh", "-c", "gunicorn --bind 0.0.0.0:$PORT app:app"]
+# Run the application using gunicorn dynamically binding to the PORT env variable with threads and a longer timeout
+CMD ["sh", "-c", "gunicorn --bind 0.0.0.0:$PORT --workers 1 --threads 4 --timeout 300 app:app"]
