@@ -2300,3 +2300,49 @@ kbd {
     background: rgba(255, 255, 255, 0.01);
 }
 
+/* DOCX Timestamp Shift Styles */
+.docx-shift-container {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    background: rgba(255, 255, 255, 0.02);
+    border: 1px solid var(--border-color);
+    border-radius: 10px;
+    padding: 2px 10px;
+    transition: var(--transition-smooth);
+}
+
+.docx-shift-container:focus-within {
+    border-color: var(--accent-secondary);
+    box-shadow: 0 0 10px rgba(236, 72, 153, 0.15);
+}
+
+.docx-shift-label {
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: var(--color-text-secondary);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    user-select: none;
+}
+
+.docx-shift-input {
+    width: 85px;
+    background: transparent;
+    border: none;
+    border-bottom: 1px dashed rgba(255, 255, 255, 0.2);
+    color: white;
+    font-family: var(--font-body);
+    font-size: 0.82rem;
+    font-weight: 600;
+    text-align: center;
+    padding: 2px 0;
+    outline: none;
+    transition: var(--transition-smooth);
+}
+
+.docx-shift-input:focus {
+    border-bottom-color: var(--accent-secondary);
+    border-bottom-style: solid;
+}
+

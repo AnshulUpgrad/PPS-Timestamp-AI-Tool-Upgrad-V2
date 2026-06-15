@@ -1289,6 +1289,38 @@ def save_chunks(filename):
     except Exception as e:
         return jsonify({'error': f"Failed to save chunks: {str(e)}"}), 500
 
+def parse_time_increment(val):
+    if not val or not isinstance(val, str) or not val.strip():
+        return 0.0
+    
+    val = val.strip()
+    is_negative = False
+    if val.startswith('-'):
+        is_negative = True
+        val = val[1:]
+    elif val.startswith('+'):
+        val = val[1:]
+        
+    parts = val.split(':')
+    try:
+        if len(parts) == 3:
+            h = int(parts[0])
+            m = int(parts[1])
+            s = float(parts[2])
+            seconds = h * 3600.0 + m * 60.0 + s
+        elif len(parts) == 2:
+            m = int(parts[0])
+            s = float(parts[1])
+            seconds = m * 60.0 + s
+        elif len(parts) == 1:
+            seconds = float(parts[0])
+        else:
+            seconds = 0.0
+            
+        return -seconds if is_negative else seconds
+    except ValueError:
+        return 0.0
+
 @app.route('/api/export-docx/<path:filename>', methods=['POST'])
 def export_docx(filename):
     try:
@@ -1343,6 +1375,48 @@ def export_docx(filename):
         except Exception as e:
             print(f"Error parsing transcript for DOCX: {e}")
 
+    # Parse time increment if provided and shift timestamps
+    time_increment = data.get('time_increment', '')
+    time_shift = parse_time_increment(time_increment)
+
+    if time_shift != 0:
+        # 1. Shift deleted_sentences
+        if deleted_sentences:
+            for ds in deleted_sentences:
+                if 'start' in ds:
+                    ds['start'] = ds.get('start', 0.0) + time_shift
+                if 'end' in ds:
+                    ds['end'] = ds.get('end', 0.0) + time_shift
+
+        # 2. Shift sentences_map
+        if sentences_map:
+            for s in sentences_map.values():
+                if 'start' in s:
+                    s['start'] = s.get('start', 0.0) + time_shift
+                if 'end' in s:
+                    s['end'] = s.get('end', 0.0) + time_shift
+
+        # 3. Shift sessions_data start/end, and slide/visual content timestamps
+        if sessions_data:
+            for s in sessions_data:
+                if 'start' in s:
+                    s['start'] = s.get('start', 0.0) + time_shift
+                if 'end' in s:
+                    s['end'] = s.get('end', 0.0) + time_shift
+                    
+                visuals = s.get('visuals', {})
+                if visuals:
+                    v_content = visuals.get('content', {})
+                    if v_content:
+                        v_items = v_content.get('items', [])
+                        for item in v_items:
+                            if 'timestamp' in item:
+                                item['timestamp'] = item.get('timestamp', 0.0) + time_shift
+                        v_details = v_content.get('details', [])
+                        for detail in v_details:
+                            if 'timestamp' in detail:
+                                detail['timestamp'] = detail.get('timestamp', 0.0) + time_shift
+
     # Helper functions for styling
     def set_cell_background(cell, fill_hex):
         tcPr = cell._tc.get_or_add_tcPr()
@@ -1373,9 +1447,16 @@ def export_docx(filename):
         tcPr.append(tcBorders)
 
     def format_seconds(seconds):
-        mins = int(seconds // 60)
+        is_neg = seconds < 0
+        seconds = abs(seconds)
+        hours = int(seconds // 3600)
+        mins = int((seconds % 3600) // 60)
         secs = int(seconds % 60)
-        return f"{mins}:{secs:02d}"
+        prefix = "-" if is_neg else ""
+        if hours > 0:
+            return f"{prefix}{hours:02d}:{mins:02d}:{secs:02d}"
+        else:
+            return f"{prefix}{mins}:{secs:02d}"
 
     # Create document
     doc = Document()

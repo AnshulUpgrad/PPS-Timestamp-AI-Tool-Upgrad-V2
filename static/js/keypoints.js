@@ -1548,8 +1548,12 @@ async function exportKeypointsDocx() {
     const originalText = btnExportDocx.innerHTML;
     btnExportDocx.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Exporting...';
 
+    const timeShiftInput = document.getElementById('docx-time-shift');
+    const timeShiftValue = timeShiftInput ? timeShiftInput.value.trim() : '';
+
     try {
         const payload = {
+            time_increment: timeShiftValue,
             deleted_sentences: deletedSentences,
             sessions: sessions.map((s, idx) => {
                 return {
