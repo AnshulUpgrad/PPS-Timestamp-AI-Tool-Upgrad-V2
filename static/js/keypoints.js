@@ -1548,6 +1548,7 @@ async function exportKeypointsDocx() {
     const originalText = btnExportDocx.innerHTML;
     btnExportDocx.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Exporting...';
 
+    try {
         const payload = {
             deleted_sentences: deletedSentences,
             sessions: sessions.map((s, idx) => {

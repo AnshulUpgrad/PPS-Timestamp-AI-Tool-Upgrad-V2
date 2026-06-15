@@ -823,7 +823,7 @@ async function runGeminiChunking() {
     btnRun.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Analyzing Content...';
     
     try {
-        const BATCH_SIZE = 40;
+        const BATCH_SIZE = 20;
         const sentencePayload = sentences.map(s => ({ id: s.id, text: s.text }));
         const builtSessions = [];
         

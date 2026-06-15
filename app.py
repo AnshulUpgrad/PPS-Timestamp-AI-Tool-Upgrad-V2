@@ -1082,7 +1082,7 @@ def chunk_sessions():
         return jsonify({'error': 'No sentences provided for chunking.'}), 400
         
     # Construct the iterative batching logic
-    BATCH_SIZE = 40
+    BATCH_SIZE = 20
     sessions = []
     
     # Helper to chunk a specific batch of sentences using OpenRouter API

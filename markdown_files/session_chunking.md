@@ -13,6 +13,18 @@ You are an AI assistant that partitions a sequence of transcription sentences in
 
 ---
 
+## Sentence-by-Sentence Evaluation Process
+
+To partition the sentences, you must simulate building the sessions incrementally, sentence-by-sentence:
+1. Start with the first sentence (index `{first_index}`) and place it into the first session.
+2. For each subsequent sentence (from `{first_index}` + 1 to `{last_index}`), analyze its context, topic, and conversational objective in relation to the sentences already in the current session.
+3. Make an explicit decision for each sentence:
+   - **FIT**: If the sentence continues the same topic/thought and does not exceed the **8-sentence hard ceiling**, add it to the current session.
+   - **SPLIT**: If the sentence begins a new topic, presents a new concept, transitions to a detailed example/analogy, introduces a new framework, or if the current session has reached the 8-sentence limit, **finalize** the current session and **start a new session** with this sentence.
+4. Proceed sequentially sentence-by-sentence until you reach the final sentence `{last_index}`.
+
+---
+
 ## Continuity Rules (Topic Integrity)
 
 These rules take priority over the sentence count target. A clean topic boundary always matters more than hitting exactly 4–5 sentences.
