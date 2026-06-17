@@ -1742,6 +1742,22 @@ def export_docx(filename):
             run_aston_val.font.size = Pt(10)
             run_aston_val.font.bold = True
             run_aston_val.font.color.rgb = RGBColor(30, 41, 59) # Slate 800
+        elif template_name == "Custom Template":
+            custom_text = visuals.get('custom_text', '')
+            p_custom = cell_right.add_paragraph()
+            p_custom.paragraph_format.space_before = Pt(6)
+            p_custom.paragraph_format.space_after = Pt(2)
+            run_custom_lbl = p_custom.add_run("Custom Text: ")
+            run_custom_lbl.font.name = 'Calibri'
+            run_custom_lbl.font.size = Pt(9.5)
+            run_custom_lbl.font.bold = True
+            run_custom_lbl.font.color.rgb = RGBColor(71, 85, 105) # Slate 600
+            
+            run_custom_val = p_custom.add_run(custom_text)
+            run_custom_val.font.name = 'Calibri'
+            run_custom_val.font.size = Pt(10)
+            run_custom_val.font.bold = True
+            run_custom_val.font.color.rgb = RGBColor(30, 41, 59) # Slate 800
         elif template_name != "Face Only" and (v_title or v_items or v_details):
             p_vc_hdr = cell_right.add_paragraph()
             p_vc_hdr.paragraph_format.space_before = Pt(6)

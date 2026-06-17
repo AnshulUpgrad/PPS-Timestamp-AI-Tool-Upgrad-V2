@@ -447,46 +447,7 @@ function recalculateSessionTimestamps() {
     });
 }
 
-// Find how many sentences from the start are needed to span at least 5 seconds
-function getAstonSentenceCount() {
-    if (!sentences || sentences.length === 0) return 0;
-    let count = 0;
-    for (let i = 0; i < sentences.length; i++) {
-        count++;
-        if (sentences[i].end >= 5.0) {
-            break;
-        }
-    }
-    return count;
-}
 
-// Enforce that the first session is hard locked as the Name aston intro session
-function enforceAstonSession() {
-    if (!sessions || sessions.length === 0) return;
-    
-    const firstSession = sessions[0];
-    if (!firstSession) return;
-    
-    if (!firstSession.visuals) {
-        firstSession.visuals = {};
-    }
-    firstSession.visuals.template_name = 'Name aston';
-    firstSession.visuals.graphics_required = true;
-    if (!firstSession.visuals.content) {
-        firstSession.visuals.content = { title: 'Intro Name Card', items: [], details: [] };
-    } else {
-        if (!firstSession.visuals.content.title) {
-            firstSession.visuals.content.title = 'Intro Name Card';
-        }
-    }
-    if (!firstSession.visuals.why_chosen) {
-        firstSession.visuals.why_chosen = 'Introductory name card segment';
-    }
-    
-    if (!firstSession.title || firstSession.title === 'Full Transcript') {
-        firstSession.title = 'Aston Intro';
-    }
-}
 
 // Compute Longest Common Subsequence of words between two arrays
 function getWordLCS(words1, words2) {
@@ -585,8 +546,7 @@ function detectDuplicateChunks() {
 
 // Render the sessions cards on the right side
 function renderSessions() {
-    // Enforce Aston intro session first
-    enforceAstonSession();
+
 
     // Run repeating chunk detection
     detectDuplicateChunks();
@@ -619,12 +579,10 @@ function renderSessions() {
         // Action buttons
         const isFirst = index === 0;
         const isLast = index === sessions.length - 1;
-        const isAston = session.visuals && session.visuals.template_name === 'Name aston';
-
         card.innerHTML = `
             <div class="session-card-header">
                 <div class="session-card-title-row">
-                    <span class="session-card-number">Session ${index + 1} ${isAston ? '<span style="font-size:0.75rem; color:#60A5FA; margin-left:5px;">(Name aston)</span>' : ''}</span>
+                    <span class="session-card-number">Session ${index + 1}</span>
                     <span class="session-card-time" style="cursor: pointer;" title="Play session" onclick="seekAudio(${sessionStart})">
                         <i class="fa-solid fa-play" style="font-size: 0.65rem; margin-right: 5px;"></i>
                         ${formatTime(sessionStart)} — ${formatTime(sessionEnd)}
@@ -635,26 +593,24 @@ function renderSessions() {
                     </label>
                 </div>
                 <div class="session-card-header-actions">
-                    ${(!isLast && !isAston) ? `
+                    ${!isLast ? `
                         <button class="btn-icon btn-merge-session" data-index="${index}" title="Merge with Session ${index + 2}" style="width: 28px; height: 28px; border-radius: 6px;">
                             <i class="fa-solid fa-link"></i>
                         </button>
                     ` : ''}
-                    ${!isAston ? `
-                        <button class="btn-icon btn-delete-session" data-index="${index}" title="Delete session" style="width: 28px; height: 28px; border-radius: 6px; color: var(--color-danger);">
-                            <i class="fa-solid fa-trash-can"></i>
-                        </button>
-                    ` : ''}
+                    <button class="btn-icon btn-delete-session" data-index="${index}" title="Delete session" style="width: 28px; height: 28px; border-radius: 6px; color: var(--color-danger);">
+                        <i class="fa-solid fa-trash-can"></i>
+                    </button>
                 </div>
             </div>
             <div class="session-card-body">
                 <div class="session-input-group">
                     <label class="session-input-label">Title</label>
-                    <input type="text" class="session-title-input" data-index="${index}" value="${escapeHtml(session.title || '')}" placeholder="Session title..." ${isAston ? 'disabled style="background:rgba(255,255,255,0.01); color:var(--color-text-muted); border-style:dashed;"' : ''}>
+                    <input type="text" class="session-title-input" data-index="${index}" value="${escapeHtml(session.title || '')}" placeholder="Session title...">
                 </div>
                 <div class="session-input-group">
                     <label class="session-input-label">Summary</label>
-                    <textarea class="session-summary-input" data-index="${index}" placeholder="Session summary..." ${isAston ? 'disabled style="background:rgba(255,255,255,0.01); color:var(--color-text-muted); border-style:dashed;"' : ''}>${escapeHtml(session.summary || '')}</textarea>
+                    <textarea class="session-summary-input" data-index="${index}" placeholder="Session summary...">${escapeHtml(session.summary || '')}</textarea>
                 </div>
                 <div class="session-sentences-container">
                     <label class="session-input-label" style="margin-bottom: 5px;">Sentences</label>
@@ -687,9 +643,9 @@ function renderSessions() {
                 // Construct up/down arrow buttons based on position
                 // We can move a sentence up if it is the first sentence of session i (i > 0)
                 // We can move a sentence down if it is the last sentence of session i (i < total_sessions - 1)
-                const showMoveUp = isFirstSent && index > 0 && !isAston;
-                const showMoveDown = isLastSent && index < sessions.length - 1 && !isAston;
-                const showSplit = sentIdx > 0 && !isAston;
+                const showMoveUp = isFirstSent && index > 0;
+                const showMoveDown = isLastSent && index < sessions.length - 1;
+                const showSplit = sentIdx > 0;
 
                 sentItem.innerHTML = `
                     <div class="sentence-subchunk-index" style="width: 20px; height: 20px; font-size: 0.65rem; border-radius: 5px;">${s.id}</div>
@@ -712,11 +668,9 @@ function renderSessions() {
                                 <i class="fa-solid fa-arrow-down"></i>
                             </button>
                         ` : ''}
-                        ${!isAston ? `
-                            <button class="btn-sentence-move btn-delete-sentence-right" data-id="${s.id}" title="Delete sentence">
-                                <i class="fa-solid fa-trash-can" style="color: var(--color-danger)"></i>
-                            </button>
-                        ` : ''}
+                        <button class="btn-sentence-move btn-delete-sentence-right" data-id="${s.id}" title="Delete sentence">
+                            <i class="fa-solid fa-trash-can" style="color: var(--color-danger)"></i>
+                        </button>
                     </div>
                 `;
 
@@ -739,12 +693,10 @@ function renderSessions() {
                         moveSentenceDown(index);
                     });
                 }
-                if (!isAston) {
-                    sentItem.querySelector('.btn-delete-sentence-right').addEventListener('click', (e) => {
-                        e.stopPropagation();
-                        deleteSentence(s.id);
-                    });
-                }
+                sentItem.querySelector('.btn-delete-sentence-right').addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    deleteSentence(s.id);
+                });
 
                 sentenceContainer.appendChild(sentItem);
             });

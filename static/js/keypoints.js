@@ -120,7 +120,6 @@ async function loadWorkspaceData() {
             // Flag repeating sentences (after filtering)
             detectDuplicateSentences();
             
-            enforceAstonSession();
             recalculateSessionTimestamps();
         } else {
             alert('No confirmed chunks found for this file. Please create chunks first.');
@@ -486,46 +485,7 @@ function recalculateSessionTimestamps() {
     });
 }
 
-// Find how many sentences from the start are needed to span at least 5 seconds
-function getAstonSentenceCount() {
-    if (!sentences || sentences.length === 0) return 0;
-    let count = 0;
-    for (let i = 0; i < sentences.length; i++) {
-        count++;
-        if (sentences[i].end >= 5.0) {
-            break;
-        }
-    }
-    return count;
-}
 
-// Enforce that the first session is hard locked as the Name aston intro session
-function enforceAstonSession() {
-    if (!sessions || sessions.length === 0) return;
-    
-    const firstSession = sessions[0];
-    if (!firstSession) return;
-    
-    if (!firstSession.visuals) {
-        firstSession.visuals = {};
-    }
-    firstSession.visuals.template_name = 'Name aston';
-    firstSession.visuals.graphics_required = true;
-    if (!firstSession.visuals.content) {
-        firstSession.visuals.content = { title: 'Intro Name Card', items: [], details: [] };
-    } else {
-        if (!firstSession.visuals.content.title) {
-            firstSession.visuals.content.title = 'Intro Name Card';
-        }
-    }
-    if (!firstSession.visuals.why_chosen) {
-        firstSession.visuals.why_chosen = 'Introductory name card segment';
-    }
-    
-    if (!firstSession.title || firstSession.title === 'Full Transcript') {
-        firstSession.title = 'Aston Intro';
-    }
-}
 
 // Compute Longest Common Subsequence of words between two arrays
 function getWordLCS(words1, words2) {
@@ -721,6 +681,12 @@ function renderKeypointsList() {
                     <input type="text" class="refinement-input path-input aston-name-input" id="aston-name-${index}" value="${escapeHtml(session.visuals?.aston_name || '')}" placeholder="Enter name..." style="width: 100%; font-size: 0.82rem; padding: 8px 12px; border-radius: 10px;">
                 </div>
 
+                <!-- Custom Template Block -->
+                <div id="custom-template-block-${index}" class="session-input-group custom-template-block hidden" style="margin-bottom: 15px;">
+                    <label class="session-input-label">Custom Template Text</label>
+                    <input type="text" class="refinement-input path-input custom-text-input" id="custom-text-${index}" value="${escapeHtml(session.visuals?.custom_text || '')}" placeholder="Enter custom text (at most 1 sentence)..." style="width: 100%; font-size: 0.82rem; padding: 8px 12px; border-radius: 10px;">
+                </div>
+
                 <!-- Visual Layout Section (Always Visible) -->
                 <div style="display: flex; flex-direction: column; gap: 12px;" id="visuals-details-${index}">
                         <div style="display: flex; gap: 15px; align-items: center; justify-content: space-between;">
@@ -734,6 +700,7 @@ function renderKeypointsList() {
                                     <optgroup label="Default / Intro">
                                         <option value="Face Only">Face Only</option>
                                         <option value="Name aston">Name aston</option>
+                                        <option value="Custom Template">Custom Template</option>
                                     </optgroup>
                                     <optgroup label="Type / Categorization Templates">
                                         <option value="Type Template 1">Type Template 1 (Low Density)</option>
@@ -848,6 +815,16 @@ function renderKeypointsList() {
             });
         }
 
+        // Bind custom template text input change
+        const customTextInput = card.querySelector(`#custom-text-${index}`);
+        if (customTextInput) {
+            customTextInput.addEventListener('input', (e) => {
+                if (!session.visuals) session.visuals = {};
+                session.visuals.custom_text = e.target.value;
+                markDirty();
+            });
+        }
+
         // Bind main heading input directly to update state on typing
         const headingInput = card.querySelector(`#heading-input-${index}`);
         const adjustHeadingHeight = () => {
@@ -918,7 +895,9 @@ function renderKeypointsList() {
             markDirty();
 
             // Trigger automatic regeneration for this session using the new template
-            runSingleSessionGeneration(index, "Regenerate visual content details specifically conforming to the newly chosen template: " + e.target.value);
+            if (e.target.value !== 'Name aston' && e.target.value !== 'Custom Template') {
+                runSingleSessionGeneration(index, "Regenerate visual content details specifically conforming to the newly chosen template: " + e.target.value);
+            }
         });
 
         // Bind graphics required checkbox
@@ -1252,6 +1231,12 @@ async function runAllKeypointsGeneration() {
 
 // Single Session Generation (invoked by clicking Per-Session "Refine/Generate")
 async function runSingleSessionGeneration(sessionIdx, feedback) {
+    const session = sessions[sessionIdx];
+    if (session && session.visuals && (session.visuals.template_name === 'Name aston' || session.visuals.template_name === 'Custom Template')) {
+        alert(`AI generation/refinement is not available for the '${session.visuals.template_name}' template. Please edit the text directly.`);
+        return;
+    }
+
     const cardEl = document.getElementById(`keypoint-card-${sessionIdx}`);
     const overlay = document.getElementById(`overlay-${sessionIdx}`);
     const overlayText = document.getElementById(`overlay-text-${sessionIdx}`);
@@ -1287,6 +1272,9 @@ async function runSingleSessionGeneration(sessionIdx, feedback) {
 // Core API caller for single session keypoint generation
 async function executeSessionGeneration(sessionIdx, feedback = '') {
     const session = sessions[sessionIdx];
+    if (session && session.visuals && (session.visuals.template_name === 'Name aston' || session.visuals.template_name === 'Custom Template')) {
+        return;
+    }
     
     // Collect sentence details mapping to this session
     const sessionSentences = session.sentence_indices.map(id => {
@@ -1641,22 +1629,32 @@ function toggleSlideTextVisibility(index, templateName) {
     const textBlock = document.getElementById(`text-content-block-${index}`);
     const contentBlock = document.getElementById(`visual-content-editor-block-${index}`);
     const astonBlock = document.getElementById(`name-aston-block-${index}`);
+    const customBlock = document.getElementById(`custom-template-block-${index}`);
     
     if (templateName === 'Face Only') {
         if (subBlock) subBlock.classList.add('hidden');
         if (textBlock) textBlock.classList.add('hidden');
         if (contentBlock) contentBlock.classList.add('hidden');
         if (astonBlock) astonBlock.classList.add('hidden');
+        if (customBlock) customBlock.classList.add('hidden');
     } else if (templateName === 'Name aston') {
         if (subBlock) subBlock.classList.add('hidden');
         if (textBlock) textBlock.classList.add('hidden');
         if (contentBlock) contentBlock.classList.add('hidden');
         if (astonBlock) astonBlock.classList.remove('hidden');
+        if (customBlock) customBlock.classList.add('hidden');
+    } else if (templateName === 'Custom Template') {
+        if (subBlock) subBlock.classList.add('hidden');
+        if (textBlock) textBlock.classList.add('hidden');
+        if (contentBlock) contentBlock.classList.add('hidden');
+        if (astonBlock) astonBlock.classList.add('hidden');
+        if (customBlock) customBlock.classList.remove('hidden');
     } else {
         if (subBlock) subBlock.classList.remove('hidden');
         if (textBlock) textBlock.classList.remove('hidden');
         if (contentBlock) contentBlock.classList.remove('hidden');
         if (astonBlock) astonBlock.classList.add('hidden');
+        if (customBlock) customBlock.classList.add('hidden');
     }
 }
 
