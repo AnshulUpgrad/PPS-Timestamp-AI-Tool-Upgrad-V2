@@ -1710,20 +1710,6 @@ def export_docx(filename):
             run_req.font.italic = True
             run_req.font.color.rgb = RGBColor(220, 38, 38) # Red 600
             
-        if why_chosen:
-            p_why = cell_right.add_paragraph()
-            p_why.paragraph_format.space_after = Pt(6)
-            run_why_lbl = p_why.add_run("Why Chosen: ")
-            run_why_lbl.font.name = 'Calibri'
-            run_why_lbl.font.size = Pt(9)
-            run_why_lbl.font.bold = True
-            run_why_lbl.font.color.rgb = RGBColor(100, 116, 139) # Slate 500
-            
-            run_why_val = p_why.add_run(why_chosen)
-            run_why_val.font.name = 'Calibri'
-            run_why_val.font.size = Pt(9)
-            run_why_val.font.italic = True
-            run_why_val.font.color.rgb = RGBColor(71, 85, 105) # Slate 600
             
         # Visual Content details (only if template is not Face Only)
         if template_name == "Name aston":
