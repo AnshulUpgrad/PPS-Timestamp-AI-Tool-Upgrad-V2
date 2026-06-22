@@ -28,6 +28,7 @@ GUIDELINES FOR HEADINGS, SUBHEADINGS & ADDITIONAL CONTENT:
    - GENERATION IS OPTIONAL: Populate this field with a concise explanation, context note, or summary paragraph ONLY if the visual template or transcription content warrants extra context beyond simple headings and subheadings. Otherwise, leave it as an empty string.
 4. Tone: Professional, curriculum-oriented, instructional.
 5. Element Timestamps: For every item in "items" or detail in "details" under the "visuals" content, you must assign a numeric "timestamp" corresponding to the exact second (as a float, e.g., 25.8) when the speaker begins discussing or explaining that specific item or detail. Use the word-level start timestamps provided in the timeline transcript to find the exact moment. The timestamp must fall within the range of this session chunk: [{session_start:.1f}s to {session_end:.1f}s].
+6. Downweight Heavy-Text Templates: Actively avoid choosing Type Templates No 30, 31, 32, 33, 35, and 36 unless the transcript contains an exceptionally large volume of complex text or dense details that cannot be simplified. Default to simpler low/medium density templates (e.g. Type Template 1, Type Template 2, Type Template No 20, 21, 22) whenever possible. If you select one of these heavy templates, you must explicitly justify in `why_chosen` why a simpler template was insufficient.
 
 VISUAL TEMPLATE SELECTION GUIDE & RULES:
 {visuals_guide_content}

@@ -33,8 +33,8 @@ complexity:
 | Density | Templates |
 |---------|-----------|
 | **Low** | Face Only, Type Template 1, Process Template 1, Differentiation Template 1, Timeline Template 1, Type Template No 24, Type Template No 25, Type Template No 26, Type Template No 28, Type Template No 29, Type Template No 41 |
-| **Medium** | Type Template 2, Process Template 2, Differentiation Template 2, Graph Templates, Hierarchy Template 1, Type Template No 22, Process Template 4, Type Template No 30, Type Template No 31, Type Template No 35 |
-| **High** | Process Template 3, Timeline Template 2, Type Template No 27, Type Template No 32, Type Template No 33, Type Template No 36, Type Template No 40 |
+| **Medium** | Type Template 2, Process Template 2, Differentiation Template 2, Graph Templates, Hierarchy Template 1, Type Template No 22, Process Template 4, Type Template No 30 *(Downweighted)*, Type Template No 31 *(Downweighted)*, Type Template No 35 *(Downweighted)* |
+| **High** | Process Template 3, Timeline Template 2, Type Template No 27, Type Template No 32 *(Downweighted)*, Type Template No 33 *(Downweighted)*, Type Template No 36 *(Downweighted)*, Type Template No 40 |
 
 ### Rule 3 — Strict Image Constraints
 - Do **not** assume or generate image assets unless using **Differentiation Template 2**, **Type Template No 17**, **Type Template No 25**, **Type Template No 27**, or **Type Template No 40** — the only templates whose layouts support image integration.
@@ -69,6 +69,16 @@ the following conditions is explicitly met:
 
 When in doubt, **split-screen wins**. Document the reason in `why_chosen`
 whenever an OG variant is selected.
+
+### Rule 6 — Downweight Heavy-Text & High-Capacity Plates (Templates 30, 31, 32, 33, 35, 36)
+- **Reserved for Heavy Text ONLY**: Do NOT select `Type Template No 30`, `Type Template No 31`, `Type Template No 32`, `Type Template No 33`, `Type Template No 35`, or `Type Template No 36` unless the transcript has an exceptionally large volume of text or dense facts that cannot be summarized or structured into simpler, low/medium-density templates.
+- **Default Alternatives**: Always default to simpler, standard templates like `Type Template 1`, `Type Template 2`, `Type Template No 20`, `Type Template No 21`, `Type Template No 22`, or standard `Process` / `Differentiation` / `Timeline` templates.
+- **Explicit Justification**: The LLM must actively penalize selecting these templates. If you choose one of these templates, you must explicitly justify in `why_chosen` why a simpler template (such as `Type Template 1`, `Type Template 2`, `Type Template No 20`, `Type Template No 21`, `Type Template No 22`) was insufficient for the transcript content.
+- **Specific Restrictions**:
+  - `Type Template No 30` (Box Plate - Horizontal) / `Type Template No 31` (Box Plate - Vertical): Use only when displaying 3-4 structured framework elements with complex sub-pointers that cannot be simplified.
+  - `Type Template No 32` / `33` (Fact Plates): Use only for dense, citation-style facts, researcher biographies, or historical background details. Do not use for standard lecture points.
+  - `Type Template No 35` (Glassbox Contrast): Use only when contrasting exactly 2 concepts where each requires multiple sentences.
+  - `Type Template No 36` (Heavy Text Plate): Use only as an absolute last resort when there is a long, dense paragraph/policy description that cannot be structured into lists.
 
 ---
 
@@ -288,7 +298,9 @@ text callouts or sub-pointer branches on specific concepts.
 ---
 
 #### Type Template No 30 · Box Plate (Horizontal)
-**When to use:** Displaying up to four concepts, pillars, categories, or framework elements horizontally side-by-side.
+> [!WARNING]
+> **Downweighted / High-Capacity Reserve**: Do NOT select this template unless the transcript contains a large amount of detailed structured text spanning up to 4 concepts/pillars. Default to simpler low/medium density templates (e.g. Type Template 1, Type Template No 20/21/22) for standard categorization.
+**When to use:** Displaying up to four concepts, pillars, categories, or framework elements horizontally side-by-side ONLY when there is too much detailed text to fit in simpler templates.
 
 | Constraint | Rule |
 |------------|------|
@@ -300,7 +312,9 @@ text callouts or sub-pointer branches on specific concepts.
 ---
 
 #### Type Template No 31 · Box Plate (Vertical)
-**When to use:** Displaying 2 or 3 vertically stacked boxes where more explanation space is needed per category.
+> [!WARNING]
+> **Downweighted / High-Capacity Reserve**: Do NOT select this template unless the transcript contains a large amount of detailed narrative or stacked vertical descriptions. Default to simpler low/medium density templates (e.g. Type Template 1, Type Template No 20/21/22) for standard categorization.
+**When to use:** Displaying 2 or 3 vertically stacked boxes where more explanation space is needed per category, ONLY when simpler templates cannot fit the detailed text.
 
 | Constraint | Rule |
 |------------|------|
@@ -312,7 +326,9 @@ text callouts or sub-pointer branches on specific concepts.
 ---
 
 #### Type Template No 32 · Fact / Background Plate
-**When to use:** Structured teaching with 4-5 main points and subpointers, or providing historical context, researcher bio, or origin background.
+> [!WARNING]
+> **Downweighted / High-Capacity Reserve**: Reserved strictly for dense researcher biographies, historical contexts, or origin backgrounds. Do not use for standard lecture points.
+**When to use:** Structured teaching with 4-5 main points and subpointers, or providing historical context, researcher bio, or origin background, ONLY when the content is exceptionally detailed.
 
 | Constraint | Rule |
 |------------|------|
@@ -324,7 +340,9 @@ text callouts or sub-pointer branches on specific concepts.
 ---
 
 #### Type Template No 33 · Fact Plate
-**When to use:** Presenting evidence-based findings, research facts, statistics, or general informational pointers with subpointers.
+> [!WARNING]
+> **Downweighted / High-Capacity Reserve**: Reserved strictly for evidence-based scientific findings, citations, statistics, or data points. Do not use for standard lecture highlights.
+**When to use:** Presenting evidence-based findings, research facts, statistics, or general informational pointers with subpointers ONLY when high text/data density is required.
 
 | Constraint | Rule |
 |------------|------|
@@ -335,7 +353,9 @@ text callouts or sub-pointer branches on specific concepts.
 ---
 
 #### Type Template No 35 · Split-Screen, Glassbox Contrast
-**When to use:** Split-screen layout displaying short statements, keywords, or paired contrasting concepts in glassbox style.
+> [!WARNING]
+> **Downweighted / High-Capacity Reserve**: Do NOT select this template for simple comparisons. Default to Differentiation Template 1/2 or Type Template No 20.
+**When to use:** Split-screen layout displaying paired contrasting concepts or short statements in glassbox style ONLY when there is a significant volume of narrative text for each concept that requires multiple sentences.
 
 | Constraint | Rule |
 |------------|------|
@@ -346,7 +366,9 @@ text callouts or sub-pointer branches on specific concepts.
 ---
 
 #### Type Template No 36 · Heavy Text Plate
-**When to use:** Detailed explanations, complex academic theories, or policy explanations that cannot be visualised using other templates.
+> [!WARNING]
+> **Downweighted / High-Capacity Reserve**: Do NOT select this template if the text can be structured into lists, bullets, or simplified. This is an absolute last resort template.
+**When to use:** Detailed explanations, complex academic theories, or policy explanations that cannot be visualised using other templates, used only as a last resort.
 
 | Constraint | Rule |
 |------------|------|
@@ -772,12 +794,12 @@ Use this table for fast first-pass matching before consulting full guidelines.
 | Academic concept/term definition + vector illustration | Type Template No 27 |
 | Memorable quote or principle citation | Type Template No 28 |
 | Learning takeaway / short definition (max 14–18 words) | Type Template No 29 |
-| Up to 4 framework pillars horizontally side-by-side | Type Template No 30 |
-| 2–3 stacked vertical boxes with longer description | Type Template No 31 |
-| Detailed topic with 4–5 main points and subpointers, or researcher bio/context | Type Template No 32 |
-| Evidence-based observations/findings with subpointers | Type Template No 33 |
-| Short statements/paired concepts in glassbox style, split-screen | Type Template No 35 |
-| Text-heavy explanation as a last resort | Type Template No 36 |
+| Up to 4 framework pillars horizontally side-by-side | Type Template No 30 *(Downweighted; reserved for heavy text)* |
+| 2–3 stacked vertical boxes with longer description | Type Template No 31 *(Downweighted; reserved for heavy text)* |
+| Detailed topic with 4–5 main points and subpointers, or researcher bio/context | Type Template No 32 *(Downweighted; reserved for bios/context)* |
+| Evidence-based observations/findings with subpointers | Type Template No 33 *(Downweighted; reserved for dense facts)* |
+| Short statements/paired concepts in glassbox style, split-screen | Type Template No 35 *(Downweighted; reserved for heavy comparison text)* |
+| Text-heavy explanation as a last resort | Type Template No 36 *(Downweighted; absolute last resort)* |
 | Case study, person scenario, story with main image | Type Template No 40 |
 | Flat list of benefits/features (max 15 words per point) | Type Template No 41 |
 | Simple ordered steps (≤ 4) | Process Template 1 |
