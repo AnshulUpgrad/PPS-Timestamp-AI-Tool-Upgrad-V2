@@ -1342,6 +1342,26 @@ audio::-webkit-media-controls-time-remaining-display {
     color: var(--color-text-primary);
 }
 
+.key-validation-status {
+    font-size: 0.8rem;
+    margin-top: 6px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    color: var(--color-text-muted);
+    transition: all 0.3s ease;
+    min-height: 1.2rem;
+}
+.key-validation-status.valid {
+    color: var(--color-success);
+}
+.key-validation-status.invalid {
+    color: var(--color-danger);
+}
+.key-validation-status.checking {
+    color: #F59E0B; /* Amber color for checking/pending */
+}
+
 .workspace-grid {
     display: grid;
     grid-template-columns: 1fr 1.2fr;

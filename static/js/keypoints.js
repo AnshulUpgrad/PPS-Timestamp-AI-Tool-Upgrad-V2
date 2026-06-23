@@ -23,17 +23,114 @@ const sessionsCountBadge = document.getElementById('sessions-count-badge');
 
 // Initialize
 document.addEventListener('DOMContentLoaded', () => {
-    initApiKeyField();
+    setupApiKeyValidation();
     parseQueryParams();
     setupEventListeners();
 });
 
-// Load saved API Key from localStorage
-function initApiKeyField() {
+function setupApiKeyValidation() {
+    const apiKeyInput = document.getElementById('gemini-api-key-input');
+    const statusEl = document.getElementById('api-key-status');
+    if (!apiKeyInput || !statusEl) return;
+
+    // Load initial key
     const savedKey = localStorage.getItem('openrouter_api_key') || localStorage.getItem('gemini_api_key');
     if (savedKey) {
         apiKeyInput.value = savedKey;
     }
+
+    let debounceTimeout = null;
+
+    async function checkKey(key) {
+        if (!key) {
+            statusEl.className = 'key-validation-status checking';
+            statusEl.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Checking server API key...';
+            try {
+                const resp = await fetch('/api/validate-key', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({})
+                });
+                const data = await resp.json();
+                if (data.has_key) {
+                    if (data.valid) {
+                        statusEl.className = 'key-validation-status valid';
+                        statusEl.innerHTML = '<i class="fa-solid fa-circle-check"></i> Server API key is verified and active.';
+                        apiKeyInput.style.borderColor = 'var(--color-success)';
+                    } else {
+                        statusEl.className = 'key-validation-status invalid';
+                        statusEl.innerHTML = `<i class="fa-solid fa-circle-xmark"></i> Server API key validation failed: ${data.error || 'Invalid key'}`;
+                        apiKeyInput.style.borderColor = 'var(--color-danger)';
+                    }
+                } else {
+                    statusEl.className = 'key-validation-status';
+                    statusEl.innerHTML = '<i class="fa-solid fa-circle-info"></i> No server API key configured. Please enter an override key.';
+                    apiKeyInput.style.borderColor = '';
+                }
+            } catch (err) {
+                statusEl.className = 'key-validation-status';
+                statusEl.innerHTML = '<i class="fa-solid fa-triangle-exclamation"></i> Could not check server API key status.';
+                apiKeyInput.style.borderColor = '';
+            }
+            return;
+        }
+
+        // Validate format first
+        if (!key.startsWith('sk-or-')) {
+            statusEl.className = 'key-validation-status invalid';
+            statusEl.innerHTML = '<i class="fa-solid fa-circle-xmark"></i> Invalid format (should start with sk-or-)';
+            apiKeyInput.style.borderColor = 'var(--color-danger)';
+            return;
+        }
+
+        statusEl.className = 'key-validation-status checking';
+        statusEl.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Verifying key...';
+        apiKeyInput.style.borderColor = '';
+
+        try {
+            const resp = await fetch('/api/validate-key', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ api_key: key })
+            });
+            const data = await resp.json();
+            if (data.valid) {
+                statusEl.className = 'key-validation-status valid';
+                statusEl.innerHTML = '<i class="fa-solid fa-circle-check"></i> API key is verified and active.';
+                apiKeyInput.style.borderColor = 'var(--color-success)';
+            } else {
+                statusEl.className = 'key-validation-status invalid';
+                statusEl.innerHTML = `<i class="fa-solid fa-circle-xmark"></i> API key verification failed: ${data.error || 'Invalid key'}`;
+                apiKeyInput.style.borderColor = 'var(--color-danger)';
+            }
+        } catch (err) {
+            statusEl.className = 'key-validation-status';
+            statusEl.innerHTML = '<i class="fa-solid fa-triangle-exclamation"></i> Network error during verification.';
+            apiKeyInput.style.borderColor = '';
+        }
+    }
+
+    // Run initial validation on page load
+    const initialKey = apiKeyInput.value.trim();
+    checkKey(initialKey);
+
+    apiKeyInput.addEventListener('input', (e) => {
+        const val = e.target.value.trim();
+        localStorage.setItem('openrouter_api_key', val);
+        
+        if (debounceTimeout) clearTimeout(debounceTimeout);
+        
+        if (!val) {
+            checkKey('');
+        } else {
+            statusEl.className = 'key-validation-status checking';
+            statusEl.innerHTML = '<i class="fa-solid fa-ellipsis fa-fade"></i> Typing...';
+            apiKeyInput.style.borderColor = '';
+            debounceTimeout = setTimeout(() => {
+                checkKey(val);
+            }, 800);
+        }
+    });
 }
 
 // Parse URL Query Params
@@ -208,10 +305,7 @@ async function loadWorkspaceData() {
 }
 
 function setupEventListeners() {
-    // API key storage
-    apiKeyInput.addEventListener('input', (e) => {
-        localStorage.setItem('openrouter_api_key', e.target.value.trim());
-    });
+    // Toggle Key visibility
 
     // Toggle Key visibility
     toggleKeyBtn.addEventListener('click', () => {

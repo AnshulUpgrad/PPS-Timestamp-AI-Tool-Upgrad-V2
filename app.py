@@ -1057,6 +1057,145 @@ def get_sentences(filename):
     except Exception as e:
         return jsonify({'error': f"Failed to parse sentences: {str(e)}"}), 500
 
+def reconcile_chunks(sessions, sentences):
+    if not sessions or not sentences:
+        if sentences:
+            # Fallback: create a single chunk containing all sentences
+            return [{
+                'title': 'Session 1',
+                'summary': 'Discussion.',
+                'sentence_indices': [s['id'] for s in sentences]
+            }]
+        return []
+
+    input_ids = [s['id'] for s in sentences]
+    input_ids_set = set(input_ids)
+
+    valid_sessions = []
+    for index, session in enumerate(sessions):
+        raw_indices = session.get('sentence_indices') or session.get('indices') or []
+        if not isinstance(raw_indices, list):
+            raw_indices = []
+
+        # Check if the model returned 0-based offsets instead of actual IDs
+        matching_actual = sum(1 for idx in raw_indices if idx in input_ids_set)
+        matching_offsets = sum(1 for idx in raw_indices if 0 <= idx < len(sentences))
+
+        mapped_ids = []
+        if matching_offsets > matching_actual:
+            # Map 0-based offset to actual ID
+            for idx in raw_indices:
+                if 0 <= idx < len(sentences):
+                    mapped_ids.append(input_ids[idx])
+        else:
+            # Filter to keep only indices that exist in input_ids
+            for idx in raw_indices:
+                if idx in input_ids_set:
+                    mapped_ids.append(idx)
+
+        # Only keep sessions that have at least one mapped ID
+        if mapped_ids:
+            mapped_ids.sort()
+            valid_sessions.append({
+                'title': session.get('title') or f'Session {index + 1}',
+                'summary': session.get('summary') or '',
+                'mapped_ids': mapped_ids
+            })
+
+    if not valid_sessions:
+        return [{
+            'title': 'Session 1',
+            'summary': 'Discussion.',
+            'sentence_indices': input_ids
+        }]
+
+    # Sort sessions by their first mapped ID
+    valid_sessions.sort(key=lambda s: s['mapped_ids'][0])
+
+    # Deduplicate sessions by their start ID
+    unique_sessions = []
+    seen_start_ids = set()
+    for session in valid_sessions:
+        start_id = session['mapped_ids'][0]
+        if start_id not in seen_start_ids:
+            seen_start_ids.add(start_id)
+            unique_sessions.append(session)
+
+    # Re-assign every input ID to exactly one session
+    final_sessions = [{
+        'title': session['title'],
+        'summary': session['summary'],
+        'sentence_indices': []
+    } for session in unique_sessions]
+
+    for id in input_ids:
+        assigned_session_idx = 0
+        for j in range(1, len(unique_sessions)):
+            if unique_sessions[j]['mapped_ids'][0] <= id:
+                assigned_session_idx = j
+            else:
+                break
+        final_sessions[assigned_session_idx]['sentence_indices'].append(id)
+
+    # Filter out any sessions that might have ended up with 0 sentences
+    return [s for s in final_sessions if len(s['sentence_indices']) > 0]
+
+
+@app.route('/api/validate-key', methods=['POST'])
+def validate_key():
+    data = request.json or {}
+    api_key = data.get('api_key')
+    is_override = True
+    
+    if not api_key:
+        api_key = os.getenv('OPENROUTER_API_KEY') or os.getenv('GEMINI_API_KEY')
+        is_override = False
+        
+    if not api_key:
+        return jsonify({
+            'valid': False,
+            'has_key': False,
+            'is_override': is_override,
+            'error': 'No API key configured.'
+        }), 200
+        
+    import urllib.request
+    import urllib.error
+    import json
+    
+    url = "https://openrouter.ai/api/v1/auth/key"
+    headers = {
+        'Authorization': f'Bearer {api_key}',
+        'HTTP-Referer': 'https://github.com/AnshulUpgrad/PPS-Timestamp-AI-Tool-Upgrad-V2',
+        'X-Title': 'PPS Timestamp AI Tool'
+    }
+    
+    req = urllib.request.Request(url, headers=headers, method='GET')
+    try:
+        with urllib.request.urlopen(req, timeout=10) as response:
+            res_data = json.loads(response.read().decode('utf-8'))
+            is_valid = res_data.get('data', {}).get('is_active', True)
+            return jsonify({
+                'valid': is_valid,
+                'has_key': True,
+                'is_override': is_override,
+                'data': res_data.get('data', {})
+            }), 200
+    except urllib.error.HTTPError as e:
+        return jsonify({
+            'valid': False,
+            'has_key': True,
+            'is_override': is_override,
+            'error': f'HTTP Error {e.code}'
+        }), 200
+    except Exception as e:
+        return jsonify({
+            'valid': False,
+            'has_key': True,
+            'is_override': is_override,
+            'error': str(e)
+        }), 200
+
 @app.route('/api/chunk-sessions', methods=['POST'])
 def chunk_sessions():
     data = request.json or {}
@@ -1152,7 +1291,9 @@ def chunk_sessions():
     if single_batch:
         try:
             try:
-                return jsonify({'sessions': call_gemini_chunker(sentences)}), 200
+                raw_sessions = call_gemini_chunker(sentences)
+                reconciled = reconcile_chunks(raw_sessions, sentences)
+                return jsonify({'sessions': reconciled}), 200
             except FileNotFoundError as tmpl_err:
                 return jsonify({'error': f'Prompt template file missing on server: {str(tmpl_err)}. Make sure the markdown_files/ directory is present.'}), 500
         except OpenRouterError as e:
@@ -1203,7 +1344,8 @@ def chunk_sessions():
         except Exception as e:
             return jsonify({'error': f"Failed to run chunking at sentence index {i - BATCH_SIZE}: {str(e)}"}), 500
             
-    return jsonify({'sessions': sessions}), 200
+    reconciled = reconcile_chunks(sessions, sentences)
+    return jsonify({'sessions': reconciled}), 200
 
 @app.route('/api/chunks/<path:filename>', methods=['GET'])
 def get_chunks(filename):

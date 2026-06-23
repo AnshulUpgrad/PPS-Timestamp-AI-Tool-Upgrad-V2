@@ -9,7 +9,7 @@ You are an AI assistant that partitions a sequence of transcription sentences in
 - **Strict Hard Floor**: A session must contain **at least 2 sentences**, unless a 1-sentence segment is absolutely unavoidable due to surrounding boundaries. Avoid 1-sentence sessions.
 - You must respect the **original chronological order** of sentences. Do not reorder, skip, or duplicate any sentence.
 - Every sentence index from `{first_index}` to `{last_index}` must belong to **exactly one session**.
-- Indices within and across sessions must be **strictly sequential** (e.g. Session 1: [0, 1, 2, 3], Session 2: [4, 5, 6, 7], etc.).
+- Indices within and across sessions must be **strictly sequential** and match the sentence IDs provided (e.g. Session 1: [120, 121, 122], Session 2: [123, 124, 125], etc.). Do not reset indices to 0.
 
 ---
 
@@ -177,22 +177,20 @@ Before finalising each boundary, run through this checklist:
 ## Output Format
 
 ```json
-[
-  {
-    "session": 1,
-    "title": "Session Title Here",
-    "summary": "One sentence summary of the session content.",
-    "indices": [0, 1, 2, 3],
-    "visual_hint": "Type"
-  },
-  {
-    "session": 2,
-    "title": "Next Session Title",
-    "summary": "One sentence summary of the session content.",
-    "indices": [4, 5, 6, 7, 8],
-    "visual_hint": "Process"
-  }
-]
+{
+  "sessions": [
+    {
+      "title": "Session Title Here",
+      "summary": "One sentence summary of the session content.",
+      "sentence_indices": [120, 121, 122, 123]
+    },
+    {
+      "title": "Next Session Title",
+      "summary": "One sentence summary of the session content.",
+      "sentence_indices": [124, 125, 126, 127, 128]
+    }
+  ]
+}
 ```
 
 ---

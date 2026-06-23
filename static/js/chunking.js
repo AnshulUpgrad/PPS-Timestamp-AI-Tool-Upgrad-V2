@@ -29,19 +29,11 @@ const deletedSentencesWrapper = document.getElementById('deleted-sentences-wrapp
 
 // Setup
 document.addEventListener('DOMContentLoaded', () => {
-    initApiKeyField();
+    setupApiKeyValidation();
     loadFilesDropdown();
     setupEventListeners();
     setupLocalMediaLoader();
 });
-
-// Load saved API Key from localStorage
-function initApiKeyField() {
-    const savedKey = localStorage.getItem('openrouter_api_key') || localStorage.getItem('gemini_api_key');
-    if (savedKey) {
-        apiKeyInput.value = savedKey;
-    }
-}
 
 // Fetch all transcribed files to populate select dropdown
 async function loadFilesDropdown() {
@@ -131,11 +123,6 @@ function setupEventListeners() {
     // File Select Change
     selectFileEl.addEventListener('change', (e) => {
         handleFileSelection(e.target.value);
-    });
-
-    // Save API key on input change
-    apiKeyInput.addEventListener('input', (e) => {
-        localStorage.setItem('openrouter_api_key', e.target.value.trim());
     });
 
     // Toggle Key visibility
@@ -755,6 +742,207 @@ async function parseJsonResponse(resp, actionLabel) {
     }
 }
 
+function reconcileSessions(sessions, sentencePayload) {
+    if (!sessions || sessions.length === 0) {
+        return [{
+            title: 'Session 1',
+            summary: 'Discussion.',
+            sentence_indices: sentencePayload.map(s => s.id)
+        }];
+    }
+
+    const inputIds = sentencePayload.map(s => s.id);
+    const inputIdsSet = new Set(inputIds);
+
+    const validSessions = [];
+    sessions.forEach((session, index) => {
+        let rawIndices = session.sentence_indices || session.indices || [];
+        if (!Array.isArray(rawIndices)) rawIndices = [];
+
+        // Check if the model returned 0-based offsets instead of actual IDs
+        let matchingActual = 0;
+        let matchingOffsets = 0;
+        rawIndices.forEach(idx => {
+            if (inputIdsSet.has(idx)) matchingActual++;
+            if (idx >= 0 && idx < sentencePayload.length) matchingOffsets++;
+        });
+
+        let mappedIds = [];
+        if (matchingOffsets > matchingActual) {
+            // Map 0-based offset to actual ID
+            rawIndices.forEach(idx => {
+                if (idx >= 0 && idx < sentencePayload.length) {
+                    mappedIds.push(inputIds[idx]);
+                }
+            });
+        } else {
+            // Filter to keep only indices that exist in inputIds
+            rawIndices.forEach(idx => {
+                if (inputIdsSet.has(idx)) {
+                    mappedIds.push(idx);
+                }
+            });
+        }
+
+        if (mappedIds.length > 0) {
+            mappedIds.sort((a, b) => a - b);
+            validSessions.push({
+                title: session.title || `Session ${index + 1}`,
+                summary: session.summary || '',
+                mapped_ids: mappedIds
+            });
+        }
+    });
+
+    if (validSessions.length === 0) {
+        return [{
+            title: 'Session 1',
+            summary: 'Discussion.',
+            sentence_indices: inputIds
+        }];
+    }
+
+    // Sort sessions by their first mapped ID
+    validSessions.sort((a, b) => a.mapped_ids[0] - b.mapped_ids[0]);
+
+    // Deduplicate sessions by their start ID
+    const uniqueSessions = [];
+    const seenStartIds = new Set();
+    validSessions.forEach(session => {
+        const startId = session.mapped_ids[0];
+        if (!seenStartIds.has(startId)) {
+            seenStartIds.add(startId);
+            uniqueSessions.push(session);
+        }
+    });
+
+    // Re-assign every input ID to exactly one session
+    const finalSessions = uniqueSessions.map(session => ({
+        title: session.title,
+        summary: session.summary,
+        sentence_indices: []
+    }));
+
+    inputIds.forEach(id => {
+        let assignedSessionIdx = 0;
+        for (let j = 1; j < uniqueSessions.length; j++) {
+            if (uniqueSessions[j].mapped_ids[0] <= id) {
+                assignedSessionIdx = j;
+            } else {
+                break;
+            }
+        }
+        finalSessions[assignedSessionIdx].sentence_indices.push(id);
+    });
+
+    return finalSessions.filter(s => s.sentence_indices.length > 0);
+}
+
+function setupApiKeyValidation() {
+    const apiKeyInput = document.getElementById('gemini-api-key-input');
+    const statusEl = document.getElementById('api-key-status');
+    if (!apiKeyInput || !statusEl) return;
+
+    // Load initial key
+    const savedKey = localStorage.getItem('openrouter_api_key') || localStorage.getItem('gemini_api_key');
+    if (savedKey) {
+        apiKeyInput.value = savedKey;
+    }
+
+    let debounceTimeout = null;
+
+    async function checkKey(key) {
+        if (!key) {
+            statusEl.className = 'key-validation-status checking';
+            statusEl.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Checking server API key...';
+            try {
+                const resp = await fetch('/api/validate-key', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({})
+                });
+                const data = await resp.json();
+                if (data.has_key) {
+                    if (data.valid) {
+                        statusEl.className = 'key-validation-status valid';
+                        statusEl.innerHTML = '<i class="fa-solid fa-circle-check"></i> Server API key is verified and active.';
+                        apiKeyInput.style.borderColor = 'var(--color-success)';
+                    } else {
+                        statusEl.className = 'key-validation-status invalid';
+                        statusEl.innerHTML = `<i class="fa-solid fa-circle-xmark"></i> Server API key validation failed: ${data.error || 'Invalid key'}`;
+                        apiKeyInput.style.borderColor = 'var(--color-danger)';
+                    }
+                } else {
+                    statusEl.className = 'key-validation-status';
+                    statusEl.innerHTML = '<i class="fa-solid fa-circle-info"></i> No server API key configured. Please enter an override key.';
+                    apiKeyInput.style.borderColor = '';
+                }
+            } catch (err) {
+                statusEl.className = 'key-validation-status';
+                statusEl.innerHTML = '<i class="fa-solid fa-triangle-exclamation"></i> Could not check server API key status.';
+                apiKeyInput.style.borderColor = '';
+            }
+            return;
+        }
+
+        // Validate format first
+        if (!key.startsWith('sk-or-')) {
+            statusEl.className = 'key-validation-status invalid';
+            statusEl.innerHTML = '<i class="fa-solid fa-circle-xmark"></i> Invalid format (should start with sk-or-)';
+            apiKeyInput.style.borderColor = 'var(--color-danger)';
+            return;
+        }
+
+        statusEl.className = 'key-validation-status checking';
+        statusEl.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Verifying key...';
+        apiKeyInput.style.borderColor = '';
+
+        try {
+            const resp = await fetch('/api/validate-key', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ api_key: key })
+            });
+            const data = await resp.json();
+            if (data.valid) {
+                statusEl.className = 'key-validation-status valid';
+                statusEl.innerHTML = '<i class="fa-solid fa-circle-check"></i> API key is verified and active.';
+                apiKeyInput.style.borderColor = 'var(--color-success)';
+            } else {
+                statusEl.className = 'key-validation-status invalid';
+                statusEl.innerHTML = `<i class="fa-solid fa-circle-xmark"></i> API key verification failed: ${data.error || 'Invalid key'}`;
+                apiKeyInput.style.borderColor = 'var(--color-danger)';
+            }
+        } catch (err) {
+            statusEl.className = 'key-validation-status';
+            statusEl.innerHTML = '<i class="fa-solid fa-triangle-exclamation"></i> Network error during verification.';
+            apiKeyInput.style.borderColor = '';
+        }
+    }
+
+    // Run initial validation on page load
+    const initialKey = apiKeyInput.value.trim();
+    checkKey(initialKey);
+
+    apiKeyInput.addEventListener('input', (e) => {
+        const val = e.target.value.trim();
+        localStorage.setItem('openrouter_api_key', val);
+        
+        if (debounceTimeout) clearTimeout(debounceTimeout);
+        
+        if (!val) {
+            checkKey('');
+        } else {
+            statusEl.className = 'key-validation-status checking';
+            statusEl.innerHTML = '<i class="fa-solid fa-ellipsis fa-fade"></i> Typing...';
+            apiKeyInput.style.borderColor = '';
+            debounceTimeout = setTimeout(() => {
+                checkKey(val);
+            }, 800);
+        }
+    });
+}
+
 function normalizeChunkSessions(rawSessions) {
     return (rawSessions || []).map((session, index) => ({
         title: session.title || `Session ${index + 1}`,
@@ -824,8 +1012,8 @@ async function runGeminiChunking() {
             builtSessions.push(...normalizeChunkSessions(data.sessions));
         }
 
-        // Gemini returns: sessions = [{title, summary, sentence_indices: []}]
-        sessions = builtSessions;
+        // Reconcile and clean up sessions to guarantee ordering and no duplicates/gaps
+        sessions = reconcileSessions(builtSessions, sentencePayload);
         
         // Re-render
         renderSessions();
