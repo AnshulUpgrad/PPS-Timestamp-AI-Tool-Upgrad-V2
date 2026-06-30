@@ -1,44 +1,542 @@
 {
-  "Type Template 1": "",
-  "Type Template 2": "",
-  "Type Template No 16": "",
-  "Type Template No 17": "",
-  "Type Template No 18": "",
-  "Type Template No 18 OG": "",
-  "Type Template No 20": "",
-  "Type Template No 20 OG": "",
-  "Type Template No 21": "",
-  "Type Template No 21 OG": "",
-  "Type Template No 22": "",
-  "Type Template No 24": "",
-  "Type Template No 25": "",
-  "Type Template No 26": "",
-  "Type Template No 27": "",
-  "Type Template No 28": "",
-  "Type Template No 29": "",
-  "Type Template No 30": "",
-  "Type Template No 31": "",
-  "Type Template No 32": "",
-  "Type Template No 33": "",
-  "Type Template No 35": "",
-  "Type Template No 36": "",
-  "Type Template No 40": "",
-  "Type Template No 41": "",
-  "Process Template 1": "",
-  "Process Template 2": "",
-  "Process Template 3": "",
-  "Process Template 4": "",
-  "Differentiation Template 1": "",
-  "Differentiation Template 2": "",
-  "Timeline Template 1": "",
-  "Timeline Template 2": "",
-  "Hierarchy Template 1": "",
-  "Graph Template 1": "",
-  "Graph Template 2": "",
-  "Graph Template 3": "",
-  "Face Only": "",
-  "Importance Template": "",
-  "IMT Mind Map": "",
-  "NMIMS Mind Map": "",
-  "Soft Skills Template": ""
+  "Face Only": {
+    "category": "Default / Fallback",
+    "density": "Low / Very Low",
+    "when_to_use": "Speech is narrative (storytelling, personal anecdotes), transitional (\"Now let's look at...\"), or lacks any clear visual structure. This is the default fallback.",
+    "constraints": {
+      "graphics_required": false,
+      "items": "Omitted",
+      "details": "Omitted"
+    }
+  },
+  "Template 1": {
+    "category": "Type / Categorization",
+    "density": "Low",
+    "when_to_use": "Quick overview of 2–5 types where each type needs only a short label and a one-sentence key differentiator.",
+    "constraints": {
+      "heading": "ALL CAPS · max 2 lines · max 32 characters",
+      "points": "Max 3 points or sub-points per type",
+      "icons": "Line icons required (replaceable with numbers or short-forms only)",
+      "images": "Not permitted",
+      "overflow": "> 4 types leads to splitting into two plates"
+    }
+  },
+  "Template 2": {
+    "category": "Type / Categorization",
+    "density": "Medium-High",
+    "when_to_use": "Detailed concept breakdowns where each type needs a subheading and a 2–3 individual bullet points each of length 6 to 8 words  .",
+    "constraints": {
+      "heading": "ALL CAPS · max 2 lines · max 32 characters",
+      "points": "Unlimited (previous points slide up)",
+      "icons": "Line icons required",
+      "images": "Not permitted"
+    }
+  },
+  "Template No 16 Split Screen": {
+    "category": "Type / Categorization",
+    "density": "Medium",
+    "when_to_use": "Split-screen layout (speaker left, graphics right) where speech outlines a sequence of up to 4 distinct steps or concepts, each needing a short description of 6 to 10 words.",
+    "constraints": {
+      "heading": "ALL CAPS · max 2 lines",
+      "subheadings": "Optional (if omitted, content is center-aligned)",
+      "description": "Max 3 lines per point; bullet pointers allowed",
+      "icons": "Line icons or numbers required",
+      "images": "Not permitted",
+      "overflow": "> 4 types leads to splitting into two plates"
+    }
+  },
+  "Template No 16 OG": {
+    "category": "Type / Categorization",
+    "density": "Medium",
+    "when_to_use": "Full-page layout (no speaker visible) where speech outlines a sequence of up to 4 distinct steps or concepts, each needing a short description of 8 to 15 words.",
+    "constraints": {
+      "heading": "ALL CAPS · max 2 lines",
+      "subheadings": "Optional (if omitted, content is center-aligned)",
+      "description": "Max 3 lines per point; bullet pointers allowed",
+      "icons": "Line icons or numbers required",
+      "images": "Not permitted",
+      "overflow": "> 4 types leads to splitting into two plates"
+    }
+  },
+  "Template No 17 Split Screen": {
+    "category": "Type / Categorization",
+    "density": "Medium-High",
+    "when_to_use": "Split-screen layout where speech introduces numbered points that require an expanded detailed explanation or supporting graphics/images for a specific list item. limited to 20 words",
+    "constraints": {
+      "heading": "Omit if it would exceed two lines",
+      "images": "Permitted (inside the sub-text box or briefly outside it)",
+      "overflow": "> 5 types leads to splitting into two plates"
+    }
+  },
+  "Template No 17 OG": {
+    "category": "Type / Categorization",
+    "density": "Medium-High",
+    "when_to_use": "Full-page layout (no speaker visible) where speech introduces numbered points that require an expanded detailed explanation for every pointer or supporting graphics/images for a specific list item. limited to 20 words additionally support bullet points ",
+    "constraints": {
+      "heading": "Omit if it would exceed two lines",
+      "images": "Permitted (inside the sub-text box or briefly outside it)",
+      "overflow": "> 5 types leads to splitting into two plates"
+    }
+  },
+  "Template No 18 Split Screen": {
+    "category": "Type / Categorization",
+    "density": "Medium",
+    "when_to_use": "Split-screen layout where speech follows a structured Q&A format, displaying specific questions alongside their answers.",
+    "constraints": {
+      "questions": "Sentence case · max 6 to 8 words",
+      "answers": "2–3 answers per question (box extends to fit) each answer 6 to 10 words",
+      "usage": "Only when both questions and answers must appear together",
+      "overflow": "> 3 questions leads to splitting into two plates"
+    }
+  },
+  "Template No 18 OG": {
+    "category": "Type / Categorization",
+    "density": "Medium",
+    "when_to_use": " full page layout (No speaker visible) where speech follows a structured Q&A format, displaying specific questions alongside their answers.",
+    "constraints": {
+      "questions": "Sentence case · max 6 to 10 words",
+      "answers": "2–3 answers per question (box extends to fit) each answer 6 to 15 words for each answer point",
+      "usage": "Only when both questions and answers must appear together",
+      "overflow": "> 3 questions leads to splitting into two plates"
+    }
+  },
+  "Template No 20 Split Screen": {
+    "category": "Type / Categorization",
+    "density": "Low-Medium",
+    "when_to_use": "Split-screen layout where speech outlines exactly two distinct types, categories, or concepts, each needing a short description(8 to 10 words) or 2 to 3 bullet points each 5 to 7 words.",
+    "constraints": {
+      "heading": "ALL CAPS · max 2 lines · 4 to 5 words max",
+      "content_alignment": "Description only -> center-aligned; with pointers -> left-aligned",
+      "word_limit": "Description text max 4 lines upto 12 words"
+    }
+  },
+  "Template No 20 OG": {
+    "category": "Type / Categorization",
+    "density": "Low-Medium",
+    "when_to_use": "Full-screen layout (no speaker visible) showing exactly two concepts side-by-side. each needing a short description(8 to 10 words) or 2 to 3 bullet points each 5 to 7 words.",
+    "constraints": {
+      "heading": "ALL CAPS · max 2 lines · 4 to 5 words max",
+      "content_alignment": "Description only -> center-aligned; with pointers -> left-aligned",
+      "word_limit": "Description text max 4 lines upto 15 words"
+    }
+  },
+  "Template No 21 Split Screen": {
+    "category": "Type / Categorization",
+    "density": "Low-Medium",
+    "when_to_use": "Split-screen layout where speech outlines exactly three types or concepts, each requiring only a subheading and a supporting icon or supporting description (5 words maximum)",
+    "constraints": {
+      "heading": "ALL CAPS · max 2 words",
+      "subheadings": "Title Case · max 2–3 words inside the circle",
+      "icons": "Required (can be replaced with short descriptions, but not recommended)",
+      "sub_bullets": "Not supported (use Type Template No 21 OG instead)"
+    }
+  },
+  "Template No 21 OG": {
+    "category": "Type / Categorization",
+    "density": "Medium",
+    "when_to_use": "Full-page layout (no speaker visible) outlining three concepts represented by supporting icon or supporting description (5 words maximum), where concepts require brief text callouts or branching sub-pointers.",
+    "constraints": {
+      "heading": "ALL CAPS · max 2 words",
+      "subheadings": "Title Case · max 2–3 words inside the circle",
+      "icons": "Required (can be replaced with short descriptions, but not recommended)",
+      "sub_bullets": "Not supported (use Type Template No 21 OG instead)"
+    }
+  },
+  "Template No 22 Split Screen": {
+    "category": "Type / Categorization",
+    "density": "Medium",
+    "when_to_use": "Split-screen layout displaying 5–7 categories or types, where each category needs a title and a brief description of 5 words.",
+    "constraints": {
+      "heading": "ALL CAPS · max 2 words",
+      "subheadings": "Title Case",
+      "description": "Sentence case · max 5 words per description",
+      "icons": "Line icons required (cannot be omitted, can use numbers)",
+      "limit": "Max 5 visible categories at once (if more, first two slide up)"
+    }
+  },
+  "Template No 22 OG": {
+    "category": "Type / Categorization",
+    "density": "Medium",
+    "when_to_use": "Full-screen layout (no speaker visible) displaying 5–7 categories or types, where each category needs a title and a brief description of 5–10 words.",
+    "constraints": {
+      "heading": "ALL CAPS · max 2 words",
+      "subheadings": "Title Case",
+      "description": "Sentence case · max 10 words per description",
+      "icons": "Line icons required (cannot be omitted, can use numbers)",
+      "limit": "Max 5 visible categories at once (if more, first two slide up)"
+    }
+  },
+  "Template No 23 Split Screen": {
+    "category": "Type / Categorization",
+    "density": "Medium",
+    "when_to_use": " Split screen template where we are showing a process or a flow or a sequence of steps where each step is 5 words long",
+    "constraints": {
+      "heading": "ALL CAPS · max 4 words",
+      "subheadings": "Not permitted",
+      "description": "Not permitted",
+      "icons": "Not nessesary, could be numbers or icons",
+      "limit": "Max 5 visible categories at once (if more, first two slide up)"
+    }
+  },
+  "Template No 23 OG": {
+    "category": "Type / Categorization",
+    "density": "Medium",
+    "when_to_use": "Full screen layout (No speaker visible) where we are showing a process or a flow or a sequence of steps where each step is 8 words long",
+    "constraints": {
+      "heading": "ALL CAPS · max 4 words",
+      "subheadings": "Not permitted",
+      "description": "Not permitted",
+      "icons": "Not nessesary, could be numbers or icons",
+      "limit": "Max 5 visible categories at once (if more, first two slide up)"
+    }
+  },
+  "Template No 24 Glass BOX": {
+    "category": "Fact Plate",
+    "density": "Low",
+    "when_to_use": "Displaying a statistics fact, quantitative survey results, or percentage data in a glassbox card.",
+    "constraints": {
+      "heading": "Not permitted",
+      "description_header": "ALL CAPS",
+      "description": "Sentence case maximum 10 words",
+      "visuals": "Glassbox card highlighting percentage figures"
+    }
+  },
+  "Template No 24 Split Screen": {
+    "category": "Fact Plate",
+    "density": "Low",
+    "when_to_use": "Split Screen template Displaying a statistics fact, quantitative survey results, or percentage data upto 15 words",
+    "constraints": {
+      "heading": "Optional · allowed only in Split-Screen · ALL CAPS",
+      "description_header": "ALL CAPS",
+      "description": "Sentence case upto 15 words",
+      "visuals": "Glassbox card highlighting percentage figures"
+    }
+  },
+  "Template No 25 Glass Box": {
+    "category": "Type / Categorization",
+    "density": "Low",
+    "when_to_use": "Displaying company, brand, product, or organization logos/images to build brand recall.",
+    "constraints": {
+      "heading": "Not permitted",
+      "logos_images": "High-quality assets must be specified",
+      "description": "Not permitted"
+    }
+  },
+  "Template No 26 Question Box": {
+    "category": "Type / Categorization",
+    "density": "Low",
+    "when_to_use": "Displaying a single focus question, reflection prompt, or discussion prompt for learner engagement.",
+    "constraints": {
+      "question_text": "Sentence case · max 10 words",
+      "headings": "Not permitted",
+      "explanations": "Not permitted"
+    }
+  },
+  "Template No 26 OG": {
+    "category": "Type / Categorization",
+    "density": "Low",
+    "when_to_use": "Displaying a single focus question, reflection prompt, or discussion prompt for learner engagement.",
+    "constraints": {
+      "question_text": "Sentence case · max 25 words",
+      "headings": "Not permitted",
+      "explanations": "Not permitted"
+    }
+  },
+  "Template No 27": {
+    "category": "Type / Categorization",
+    "density": "High",
+    "when_to_use": "Defining a new term, theory, framework, or dictionary-style definition.",
+    "constraints": {
+      "heading": "ALL CAPS",
+      "subheading": "Optional · Title Case",
+      "definition_text": "Sentence case · Continuous text or bullet pointers",
+      "keywords": "Bold and highlighted in red",
+      "right_column": "Supporting vector/illustration required",
+      "processes": "Do not use for sequential processes"
+    }
+  },
+  "Template No 28": {
+    "category": "Type / Categorization",
+    "density": "Low",
+    "when_to_use": "Highlighting famous quotes, sayings, principles, or memorable statements.",
+    "constraints": {
+      "quote_text": "Sentence case · no trailing periods",
+      "speaker_image": "Not permitted",
+      "keywords": "Bold and black",
+      "styling": "Stylized quotation marks"
+    }
+  },
+  "Type Template No 29": {
+    "category": "Type / Categorization",
+    "density": "Low",
+    "when_to_use": "Highlighting a key learning takeaway, conclusion, or brief definition. Does not use a header/title.",
+    "constraints": {
+      "heading": "Not permitted",
+      "punctuation": "No trailing periods",
+      "keywords": "Bold and highlighted in red",
+      "word_limit": "Ideally max 14–18 words"
+    }
+  },
+  "Type Template No 30": {
+    "category": "Type / Categorization",
+    "density": "Medium (Downweighted)",
+    "when_to_use": "Displaying up to 4 concepts, pillars, or framework elements horizontally side-by-side ONLY when there is too much text to fit in simpler templates.",
+    "constraints": {
+      "downweighted_status": "Reserve for heavy text only",
+      "heading": "ALL CAPS · max 32 characters",
+      "subheading": "Title Case (in each box)",
+      "sub_pointers": "Sentence case · max 5 words per pointer",
+      "limit": "Max 4 horizontal boxes"
+    }
+  },
+  "Type Template No 31": {
+    "category": "Type / Categorization",
+    "density": "Medium (Downweighted)",
+    "when_to_use": "Displaying 2 or 3 vertically stacked boxes where more explanation space is needed per category, ONLY when simpler templates cannot fit the detailed text.",
+    "constraints": {
+      "downweighted_status": "Reserve for heavy text only",
+      "heading": "ALL CAPS · max 32 characters",
+      "subheading": "Title Case",
+      "sub_pointers": "Sentence case",
+      "limit": "Max 3 stacked vertical boxes"
+    }
+  },
+  "Type Template No 32": {
+    "category": "Type / Categorization",
+    "density": "High (Downweighted)",
+    "when_to_use": "Structured teaching with 4–5 main points and subpointers, or providing historical context, researcher bio, or origin background, ONLY when the content is exceptionally detailed.",
+    "constraints": {
+      "downweighted_status": "Reserved strictly for researcher biographies, historical contexts, or origin backgrounds",
+      "heading": "ALL CAPS · max 32 characters",
+      "subheadings": "Mandatory · Title Case for each main point/fact",
+      "sub_points": "Sentence case",
+      "definitions": "Do not use for pure definitions"
+    }
+  },
+  "Type Template No 33": {
+    "category": "Type / Categorization",
+    "density": "High (Downweighted)",
+    "when_to_use": "Presenting evidence-based findings, research facts, statistics, or data points with subpointers ONLY when high text/data density is required.",
+    "constraints": {
+      "downweighted_status": "Reserved strictly for evidence-based scientific findings, citations, statistics, or data points",
+      "heading": "ALL CAPS · max 32 characters",
+      "subheadings": "Mandatory · Title Case for each point",
+      "sub_points": "Can have multiple sub-points in sentence case"
+    }
+  },
+  "Type Template No 35": {
+    "category": "Type / Categorization",
+    "density": "Medium (Downweighted)",
+    "when_to_use": "Split-screen layout displaying paired contrasting concepts or short statements in glassbox style ONLY when there is a significant volume of narrative text for each concept that requires multiple sentences.",
+    "constraints": {
+      "downweighted_status": "Do not select for simple comparisons; default to Differentiation Template 1/2 or Type Template No 20",
+      "heading": "ALL CAPS",
+      "subheading": "Title Case",
+      "description": "Sentence case (no header style if only one sentence)"
+    }
+  },
+  "Type Template No 36": {
+    "category": "Type / Categorization",
+    "density": "High (Downweighted)",
+    "when_to_use": "Detailed explanations, complex academic theories, or policy explanations that cannot be visualised using other templates. Used only as a last resort.",
+    "constraints": {
+      "downweighted_status": "Absolute last resort template",
+      "heading": "ALL CAPS · max 32 characters",
+      "subheading": "Title Case",
+      "description": "Sentence case"
+    }
+  },
+  "Type Template No 40": {
+    "category": "Type / Categorization",
+    "density": "High",
+    "when_to_use": "Presentation where a specific case study, historical person, scenario, object, or story is central to the narration.",
+    "constraints": {
+      "heading": "ALL CAPS",
+      "description": "Sentence case · no trailing periods",
+      "person_images": "Must include name labels",
+      "right_column": "Dedicated case study image area (can use pointers and source tags)"
+    }
+  },
+  "Type Template No 41": {
+    "category": "Type / Categorization",
+    "density": "Low",
+    "when_to_use": "Lists of characteristics, benefits, features, or standalone ideas without hierarchical complexity.",
+    "constraints": {
+      "description": "Sentence case · max 15 words per pointer",
+      "limit": "Max 6 visible pointers before sliding up",
+      "sub_pointers": "Not permitted (strictly flat list)"
+    }
+  },
+  "Process Template 1": {
+    "category": "Process / Sequence",
+    "density": "Low",
+    "when_to_use": "Simple ordered steps needing only short labels and brief explanations.",
+    "constraints": {
+      "heading": "ALL CAPS · max 2 lines · max 20 characters",
+      "pointers": "Bullets allowed · max 2 lines · aligned to the text",
+      "images": "Not permitted",
+      "overflow": "> 4 steps leads to first step sliding out"
+    }
+  },
+  "Process Template 2": {
+    "category": "Process / Sequence",
+    "density": "Medium",
+    "when_to_use": "Multi-stage reasoning or moderately detailed academic procedures; each stage needs a subheading and a descriptive explanation.",
+    "constraints": {
+      "heading": "ALL CAPS · max 2 lines · max 32 characters",
+      "icons": "Optional (remove if > 2 pointers per stage)",
+      "pointers": "Can be faded to fit additional points",
+      "images": "Not permitted",
+      "overflow": "> 4 steps leads to first step sliding out"
+    }
+  },
+  "Process Template 3": {
+    "category": "Process / Sequence",
+    "density": "High",
+    "when_to_use": "Deep technical or multi-level workflows requiring headers, structured details, and multiple bullet points.",
+    "constraints": {
+      "heading": "ALL CAPS · max 2 lines · max 32 characters",
+      "points": "Unlimited sub-points (previous points slide up)",
+      "icons_images": "Not permitted",
+      "overflow": "> 4 steps leads to first step sliding out"
+    }
+  },
+  "Process Template 4": {
+    "category": "Process / Sequence",
+    "density": "Medium",
+    "when_to_use": "Split-screen layout displaying a sequential process, workflow, or customer journey with step titles (1–5 words) and NO supporting description.",
+    "constraints": {
+      "heading": "ALL CAPS",
+      "subheadings": "Title Case",
+      "icons": "Line icons or numbers required",
+      "limit": "Max 5 stages visible at one time (first stage slides out if more)",
+      "descriptions": "Not permitted"
+    }
+  },
+  "Differentiation Template 1": {
+    "category": "Differentiation / Comparison",
+    "density": "Low",
+    "when_to_use": "Simple column-based text comparison of exactly two sides. Never use for chronological or ordered content.",
+    "constraints": {
+      "text_length": "Max 3 lines per comparison point",
+      "icons_images": "Not permitted",
+      "overflow": "> 4 differences leads to splitting into two plates (first 1-2 points slide out)"
+    }
+  },
+  "Differentiation Template 2": {
+    "category": "Differentiation / Comparison",
+    "density": "Medium",
+    "when_to_use": "Case studies or brand comparisons of exactly two sides requiring a dedicated visual/image area alongside explanation text.",
+    "constraints": {
+      "side_headings": "Max 3 words each",
+      "content": "Description and pointers below the image · max 2–3 lines",
+      "images": "Required (used for differences only)"
+    }
+  },
+  "Timeline Template 1": {
+    "category": "Timeline / Chronological",
+    "density": "Low",
+    "when_to_use": "Brief milestones needing only a year/timestamp and a 3–5 word event summary.",
+    "constraints": {
+      "pointers": "Cannot be added",
+      "images": "Text can be replaced with images",
+      "timestamps": "> 5 timestamps supported"
+    }
+  },
+  "Timeline Template 2": {
+    "category": "Timeline / Chronological",
+    "density": "Medium-High",
+    "when_to_use": "Detailed chronological analysis needing time markers, event titles, and supporting descriptive bullet points.",
+    "constraints": {
+      "heading": "ALL CAPS · max 32 characters",
+      "points": "Unlimited · > 5 timestamps supported",
+      "icons_images": "Not permitted"
+    }
+  },
+  "Hierarchy Template 1": {
+    "category": "Hierarchy / Structures",
+    "density": "Medium",
+    "when_to_use": "Node-based tree structures representing hierarchies, taxonomies, organization structures, or architectures.",
+    "constraints": {
+      "heading": "ALL CAPS",
+      "node_text": "Title Case · max 2 lines per node",
+      "points": "Unlimited nodes",
+      "images": "Not permitted"
+    }
+  },
+  "Graph Template 1": {
+    "category": "Graph / Quantitative",
+    "density": "Medium",
+    "when_to_use": "Showing trends or performance over a continuous progression (X-axis vs Y-axis). Only use with explicit numeric data.",
+    "constraints": {
+      "heading": "Required · ALL CAPS",
+      "axis_labels": "Sentence case",
+      "sub_points": "May appear on the right side of the graph",
+      "source": "Must be provided explicitly (e.g. 'Courtesy: Company Name')"
+    }
+  },
+  "Graph Template 2": {
+    "category": "Graph / Quantitative",
+    "density": "Medium",
+    "when_to_use": "Comparing quantities across discrete categories. Only use with explicit numeric data.",
+    "constraints": {
+      "heading": "Required · ALL CAPS",
+      "axis_labels": "Sentence case",
+      "sub_points": "May appear on the right side of the graph",
+      "source": "Must be provided explicitly"
+    }
+  },
+  "Graph Template 3": {
+    "category": "Graph / Quantitative",
+    "density": "Medium",
+    "when_to_use": "Representing proportional distributions (parts of a whole summing to 100%). Only use with explicit numeric data.",
+    "constraints": {
+      "heading": "Required · ALL CAPS",
+      "sub_points": "May appear on the right side of the graph",
+      "source": "Must be provided explicitly"
+    }
+  },
+  "Importance Template": {
+    "category": "Misc / Navigation",
+    "density": "Low-Medium",
+    "when_to_use": "Introducing a module/concept with 5–6 subtopics, or summarizing 5–6 key outcomes/takeaways explained in a single sentence (max 12 words) focusing on practical benefits.",
+    "constraints": {
+      "heading": "ALL CAPS · max 2 lines · as short as possible",
+      "description": "Sentence case · max 2 lines · 10–12 words per point",
+      "limit": "2–5 importance statements",
+      "theory": "Do not explain the entire module or include detailed theory"
+    }
+  },
+  "IMT Mind Map": {
+    "category": "Misc / Navigation",
+    "density": "Medium",
+    "when_to_use": "Visually showing the overall structure of a course or module and how topics connect (used as a navigation map).",
+    "constraints": {
+      "heading": "FULL CAPS · at the top",
+      "text": "Concise · focus on learning structure",
+      "circles": "Should not contain text",
+      "usage": "Do not use for detailed content explanations"
+    }
+  },
+  "NMIMS Mind Map": {
+    "category": "Misc / Navigation",
+    "density": "Medium",
+    "when_to_use": "Visually mapping NMIMS course module structures, showing learning outcomes and progression (completed segments turn green).",
+    "constraints": {
+      "audience": "NMIMS programs only",
+      "text": "Concise · focus on learning outcomes",
+      "interactive": "Completed segments turn green to indicate progress",
+      "usage": "Do not use for concept teaching or detailed content explanations"
+    }
+  },
+  "Soft Skills Template": {
+    "category": "Misc / Navigation",
+    "density": "Low",
+    "when_to_use": "Displaying short, simple 1-2 liner concepts, takeaways, summaries, Insights, or key messages (max 15 words). Does not use a header/title.",
+    "constraints": {
+      "heading": "Not permitted",
+      "description": "Sentence case · max 2 sentences · max 15 words total",
+      "visuals": "Simple visual treatment · minimal text"
+    }
+  }
 }

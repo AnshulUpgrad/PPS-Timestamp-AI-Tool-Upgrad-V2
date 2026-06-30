@@ -22,6 +22,8 @@ const btnAddSession = document.getElementById('btn-add-session');
 const btnSaveSessions = document.getElementById('btn-save-sessions');
 const btnConfirmChunks = document.getElementById('btn-confirm-chunks');
 const btnExportJson = document.getElementById('btn-export-json');
+const btnImportJson = document.getElementById('btn-import-json');
+const importJsonSelect = document.getElementById('import-json-select');
 const sessionsEmptyState = document.getElementById('sessions-empty-state');
 const sessionsList = document.getElementById('sessions-list');
 const deletedCountBadge = document.getElementById('deleted-count-badge');
@@ -148,6 +150,16 @@ function setupEventListeners() {
 
     // Export JSON file
     btnExportJson.addEventListener('click', exportSessionsJSON);
+
+    // Import JSON file
+    btnImportJson.addEventListener('click', () => {
+        if (!activeFile) {
+            alert('Please select a transcript file first before importing its checkpoint.');
+            return;
+        }
+        importJsonSelect.click();
+    });
+    importJsonSelect.addEventListener('change', handleImportJSON);
 
     // Add Session manually at the end
     btnAddSession.addEventListener('click', addSessionManually);
@@ -1089,6 +1101,10 @@ async function confirmChunksAndNext() {
     btnConfirmChunks.disabled = true;
     btnConfirmChunks.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Confirming...';
     
+    // Save to localStorage as a primary backup (crucial for stateless environments like Vercel)
+    localStorage.setItem('chunks_' + activeFile, JSON.stringify({ sessions: sessions }));
+    localStorage.setItem('deleted_' + activeFile, JSON.stringify({ deleted_sentences: deletedSentences }));
+    
     const payload = {
         sessions: sessions,
         deleted_sentences: deletedSentences
@@ -1158,9 +1174,75 @@ function exportSessionsJSON() {
     
     const baseName = activeFile.substring(0, activeFile.lastIndexOf('.')) || activeFile;
     downloadAnchor.setAttribute("download", `${baseName}_chunks.json`);
-    document.body.appendChild(downloadAnchor);
+        document.body.appendChild(downloadAnchor);
     downloadAnchor.click();
     downloadAnchor.remove();
+}
+
+function handleImportJSON(e) {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = async function(evt) {
+        try {
+            const data = JSON.parse(evt.target.result);
+            if (!data.sessions) {
+                alert('Invalid JSON structure: missing "sessions" array.');
+                return;
+            }
+
+            // Check filename mismatch
+            if (data.filename && data.filename !== activeFile) {
+                if (!confirm(`Warning: The uploaded checkpoint is for file "${data.filename}" but you currently have "${activeFile}" loaded. Do you want to load it anyway?`)) {
+                    e.target.value = '';
+                    return;
+                }
+            }
+
+            // Reload original sentences first to reset any filtering
+            let originalSentences = [];
+            const cachedTranscript = localStorage.getItem('transcript_' + activeFile);
+            if (cachedTranscript) {
+                const transcript = JSON.parse(cachedTranscript);
+                originalSentences = splitTranscriptIntoSentences(transcript);
+            } else {
+                const sentResp = await fetch(`/api/sentences/${encodeURIComponent(activeFile)}`);
+                if (!sentResp.ok) throw new Error('Failed to fetch sentence parse');
+                const sentData = await sentResp.json();
+                originalSentences = sentData.sentences;
+            }
+
+            // Set states
+            sessions = data.sessions || [];
+            deletedSentences = data.deleted_sentences || [];
+
+            // Filter out deleted sentences from original sentences list
+            const deletedIds = new Set(deletedSentences.map(d => d.id));
+            sentences = originalSentences.filter(s => !deletedIds.has(s.id));
+            allSentences = [...originalSentences];
+
+            // Re-render components
+            recalculateSessionTimestamps();
+            renderSentencesList();
+            renderSessions();
+            renderDeletedSentences();
+            markDirty();
+
+            // Save to localStorage
+            localStorage.setItem('chunks_' + activeFile, JSON.stringify({ sessions: sessions }));
+            localStorage.setItem('deleted_' + activeFile, JSON.stringify({ deleted_sentences: deletedSentences }));
+
+            alert('Checkpoint JSON imported successfully!');
+        } catch (err) {
+            console.error(err);
+            alert('Failed to parse JSON file: ' + err.message);
+        } finally {
+            // Reset input
+            e.target.value = '';
+        }
+    };
+    reader.readAsText(file);
 }
 
 // STACK-LIKE SENTENCE PARTITION SHIFT OPERATIONS
