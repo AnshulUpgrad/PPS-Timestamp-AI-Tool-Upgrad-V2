@@ -235,7 +235,7 @@
   "Template No 26 OG": {
     "category": "Type / Categorization",
     "density": "Low",
-    "when_to_use": "Displaying a single focus question, reflection prompt, or discussion prompt for learner engagement.",
+    "when_to_use": "Displaying a single focus question, reflection prompt, or discussion prompt for learner engagement. only sentence ",
     "constraints": {
       "question_text": "Sentence case · max 25 words",
       "headings": "Not permitted",
@@ -269,7 +269,7 @@
   "Type Template No 29": {
     "category": "Type / Categorization",
     "density": "Low",
-    "when_to_use": "Highlighting a key learning takeaway, conclusion, or brief definition. Does not use a header/title.",
+    "when_to_use": "Highlighting a key learning takeaway, conclusion, or brief definition. Does not use a header/title. must be a sentence",
     "constraints": {
       "heading": "Not permitted",
       "punctuation": "No trailing periods",
@@ -279,30 +279,33 @@
   },
   "Type Template No 30": {
     "category": "Type / Categorization",
+    "name": "Box plate horizontal",
     "density": "Medium (Downweighted)",
-    "when_to_use": "Displaying up to 4 concepts, pillars, or framework elements horizontally side-by-side ONLY when there is too much text to fit in simpler templates.",
+    "when_to_use": "Displaying up to 4 concepts, pillars, or framework elements horizontally side-by-side with subheading and description each subheading limited to 4 words discription could be running text or pointers, the word limit can be 10-15 if its running text  words per point if we are using pointers  max 3 points of length 6 words each ONLY when there is too much text to fit in simpler templates.",
     "constraints": {
       "downweighted_status": "Reserve for heavy text only",
       "heading": "ALL CAPS · max 32 characters",
-      "subheading": "Title Case (in each box)",
-      "sub_pointers": "Sentence case · max 5 words per pointer",
+      "subheading": "Title Case (in each box) subheading is max 4 words",
+      "sub_pointers": "Sentence case · max 6 words per pointer",
       "limit": "Max 4 horizontal boxes"
     }
   },
-  "Type Template No 31": {
+  "Template No 31": {
     "category": "Type / Categorization",
+    "name": "box plate vertical",
     "density": "Medium (Downweighted)",
-    "when_to_use": "Displaying 2 or 3 vertically stacked boxes where more explanation space is needed per category, ONLY when simpler templates cannot fit the detailed text.",
+    "when_to_use": "Displaying 2 or 3 vertically stacked boxes where more explanation space is needed per category, can be running text or pointers, for running text word limit is max 20 ONLY when simpler templates cannot fit the detailed text.",
     "constraints": {
       "downweighted_status": "Reserve for heavy text only",
       "heading": "ALL CAPS · max 32 characters",
-      "subheading": "Title Case",
-      "sub_pointers": "Sentence case",
+      "subheading": "Title Case 3 to 4 words max",
+      "sub_pointers": "Sentence case maximum of 4 points each being 8 words max",
       "limit": "Max 3 stacked vertical boxes"
     }
   },
   "Type Template No 32": {
     "category": "Type / Categorization",
+    "name": "fact/background plate",
     "density": "High (Downweighted)",
     "when_to_use": "Structured teaching with 4–5 main points and subpointers, or providing historical context, researcher bio, or origin background, ONLY when the content is exceptionally detailed.",
     "constraints": {
@@ -326,39 +329,43 @@
   },
   "Type Template No 35": {
     "category": "Type / Categorization",
+    "name": "text glassbox",
     "density": "Medium (Downweighted)",
     "when_to_use": "Split-screen layout displaying paired contrasting concepts or short statements in glassbox style ONLY when there is a significant volume of narrative text for each concept that requires multiple sentences.",
     "constraints": {
       "downweighted_status": "Do not select for simple comparisons; default to Differentiation Template 1/2 or Type Template No 20",
-      "heading": "ALL CAPS",
-      "subheading": "Title Case",
-      "description": "Sentence case (no header style if only one sentence)"
+      "heading": "ALL CAPS 3 words max",
+      "subheading": "Do not add",
+      "description": "short description 15 words, bulleted list, 3 points max each 4 words"
     }
   },
   "Type Template No 36": {
     "category": "Type / Categorization",
+    "name": "heavy text plate",
     "density": "High (Downweighted)",
     "when_to_use": "Detailed explanations, complex academic theories, or policy explanations that cannot be visualised using other templates. Used only as a last resort.",
     "constraints": {
       "downweighted_status": "Absolute last resort template",
       "heading": "ALL CAPS · max 32 characters",
-      "subheading": "Title Case",
+      "subheading": " multiple subheadings, 5 words each Title Case, text in bullets 3 to 4 under each , each can have subbullets",
       "description": "Sentence case"
     }
   },
   "Type Template No 40": {
     "category": "Type / Categorization",
+    "name": "image with description",
     "density": "High",
     "when_to_use": "Presentation where a specific case study, historical person, scenario, object, or story is central to the narration.",
     "constraints": {
       "heading": "ALL CAPS",
-      "description": "Sentence case · no trailing periods",
+      "description": "Sentence case · no trailing periods maximum 25 words/ can be pointers if pointers then 4 points of 6-7 words each, the ",
       "person_images": "Must include name labels",
       "right_column": "Dedicated case study image area (can use pointers and source tags)"
     }
   },
   "Type Template No 41": {
     "category": "Type / Categorization",
+    "name": "pointers",
     "density": "Low",
     "when_to_use": "Lists of characteristics, benefits, features, or standalone ideas without hierarchical complexity.",
     "constraints": {
@@ -510,10 +517,11 @@
   "IMT Mind Map": {
     "category": "Misc / Navigation",
     "density": "Medium",
-    "when_to_use": "Visually showing the overall structure of a course or module and how topics connect (used as a navigation map).",
+    "when_to_use": "Visually showing the overall structure of a course or module and how topics connect (used as a navigation map). divided into 3 or 4 topics",
     "constraints": {
       "heading": "FULL CAPS · at the top",
       "text": "Concise · focus on learning structure",
+      "subheadings": "topic names are the subheadings· max 2-3 words each topic is a list of maximum 5 constituents with 3-4 words each",
       "circles": "Should not contain text",
       "usage": "Do not use for detailed content explanations"
     }
@@ -521,8 +529,9 @@
   "NMIMS Mind Map": {
     "category": "Misc / Navigation",
     "density": "Medium",
-    "when_to_use": "Visually mapping NMIMS course module structures, showing learning outcomes and progression (completed segments turn green).",
+    "when_to_use": "Visually mapping course/topic/module  divided into 3 or 4 constutuent subtopics. ",
     "constraints": {
+      "subheadings": "each constutuent topic is the subheading, each subheading should have an icon",
       "audience": "NMIMS programs only",
       "text": "Concise · focus on learning outcomes",
       "interactive": "Completed segments turn green to indicate progress",
