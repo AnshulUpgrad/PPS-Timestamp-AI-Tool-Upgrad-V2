@@ -37,6 +37,15 @@ else:
 UPLOAD_FOLDER = os.path.join(base_dir, 'uploads')
 TRANSCRIPTIONS_FOLDER = os.path.join(base_dir, 'transcriptions')
 CONFIG_FILE = os.path.join(base_dir, 'config.json')
+TEMPLATE_CATALOG_FILE = os.path.join(os.path.abspath(os.path.dirname(__file__)), 'templates.json')
+
+DEFAULT_AI_MODEL = os.getenv('OPENROUTER_MODEL', 'openai/gpt-5.6-luna')
+MODEL_ALIASES = {
+    'gemini-2.5-flash': 'google/gemini-2.5-flash',
+    'gemini-2.5-pro': 'google/gemini-2.5-pro',
+    'gemini-2.0-flash': 'google/gemini-2.0-flash',
+    'gpt-5.6-luna': 'openai/gpt-5.6-luna'
+}
 
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 os.makedirs(TRANSCRIPTIONS_FOLDER, exist_ok=True)
@@ -66,6 +75,39 @@ def load_prompt_template(filename):
     path = os.path.join(base_dir, 'markdown_files', filename)
     with open(path, 'r', encoding='utf-8') as f:
         return f.read()
+
+def load_template_catalog():
+    """Load the canonical visual-template catalog used by both AI and UI flows."""
+    with open(TEMPLATE_CATALOG_FILE, 'r', encoding='utf-8') as f:
+        catalog = json.load(f)
+
+    if not isinstance(catalog, dict) or not catalog:
+        raise ValueError('templates.json must contain a non-empty JSON object.')
+
+    for template_id, template in catalog.items():
+        if not isinstance(template_id, str) or not template_id.strip():
+            raise ValueError('Every template must have a non-empty string identifier.')
+        if not isinstance(template, dict):
+            raise ValueError(f"Template '{template_id}' must be a JSON object.")
+        for required_field in ('category', 'density', 'when_to_use', 'constraints'):
+            if required_field not in template:
+                raise ValueError(f"Template '{template_id}' is missing '{required_field}'.")
+
+    return catalog
+
+def normalize_model_name(model_name):
+    model_name = (model_name or DEFAULT_AI_MODEL).strip()
+    return MODEL_ALIASES.get(model_name, model_name)
+
+def get_openrouter_api_key(data=None):
+    data = data or {}
+    return (
+        request.headers.get('X-OpenRouter-Key')
+        or request.headers.get('X-Gemini-Key')  # Legacy client compatibility
+        or data.get('api_key')
+        or os.getenv('OPENROUTER_API_KEY')
+        or os.getenv('GEMINI_API_KEY')  # Legacy environment compatibility
+    )
 
 class OpenRouterError(Exception):
     def __init__(self, message, status_code=500):
@@ -370,8 +412,21 @@ def handle_settings():
 @app.route('/api/config', methods=['GET'])
 def get_app_config():
     return jsonify({
-        'modal_transcribe_url': os.getenv('MODAL_TRANSCRIBE_URL', '')
+        'modal_transcribe_url': os.getenv('MODAL_TRANSCRIBE_URL', ''),
+        'default_ai_model': DEFAULT_AI_MODEL
     }), 200
+
+@app.route('/api/templates', methods=['GET'])
+def get_template_catalog():
+    try:
+        catalog = load_template_catalog()
+        return jsonify({
+            'templates': catalog,
+            'template_ids': list(catalog.keys()),
+            'default_ai_model': DEFAULT_AI_MODEL
+        }), 200
+    except Exception as e:
+        return jsonify({'error': f'Failed to load template catalog: {str(e)}'}), 500
 
 @app.route('/api/extract', methods=['POST'])
 def extract_audio():
@@ -841,18 +896,10 @@ def generate_session_keypoints():
     existing_subheadings = data.get('existing_subheadings', [])
     existing_text_content = data.get('existing_text_content', '')
     existing_visuals = data.get('existing_visuals', None)
-    model_name = data.get('model', 'google/gemini-2.5-flash')
-    
-    # Normalize model names to OpenRouter IDs
-    if model_name == 'gemini-2.5-flash':
-        model_name = 'google/gemini-2.5-flash'
-    elif model_name == 'gemini-2.5-pro':
-        model_name = 'google/gemini-2.5-pro'
-    elif model_name == 'gemini-2.0-flash':
-        model_name = 'google/gemini-2.0-flash'
+    model_name = normalize_model_name(data.get('model'))
         
     # API key from headers, request body, or environment
-    api_key = request.headers.get('X-Gemini-Key') or data.get('api_key') or os.getenv('OPENROUTER_API_KEY') or os.getenv('GEMINI_API_KEY')
+    api_key = get_openrouter_api_key(data)
     
     if not api_key:
         return jsonify({'error': 'OpenRouter API Key is missing. Please configure OPENROUTER_API_KEY in your .env file.'}), 400
@@ -884,21 +931,12 @@ def generate_session_keypoints():
     session_start = sentences[0].get('start', 0.0) if sentences else 0.0
     session_end = sentences[-1].get('end', 0.0) if sentences else 0.0
     
-    # Try reading the reinforced visuals guide
-    visuals_guide_content = ""
+    # templates.json is the canonical template-selection guide.
     try:
-        visuals_guide_path = os.path.join(os.path.dirname(__file__), 'markdown_files', 'reinforced_visuals.md')
-        if os.path.exists(visuals_guide_path):
-            with open(visuals_guide_path, 'r', encoding='utf-8') as f:
-                visuals_guide_content = f.read()
-        else:
-            # Fallback to loading Visuals_guide.md if reinforced_visuals.md doesn't exist yet
-            visuals_guide_path_alt = os.path.join(os.path.dirname(__file__), 'markdown_files', 'Visuals_guide.md')
-            if os.path.exists(visuals_guide_path_alt):
-                with open(visuals_guide_path_alt, 'r', encoding='utf-8') as f:
-                    visuals_guide_content = f.read()
+        template_catalog = load_template_catalog()
+        visuals_guide_content = json.dumps(template_catalog, ensure_ascii=False, indent=2)
     except Exception as e:
-        print(f"Error reading visuals guide: {e}")
+        return jsonify({'error': f'Failed to load templates.json: {str(e)}'}), 500
         
     # Design prompt
     if feedback:
@@ -944,7 +982,10 @@ def generate_session_keypoints():
             "visuals": {
                 "type": "object",
                 "properties": {
-                    "template_name": {"type": "string"},
+                    "template_name": {
+                        "type": "string",
+                        "enum": list(template_catalog.keys())
+                    },
                     "why_chosen": {"type": "string"},
                     "graphics_required": {"type": "boolean"},
                     "content": {
@@ -1200,19 +1241,11 @@ def validate_key():
 def chunk_sessions():
     data = request.json or {}
     sentences = data.get('sentences', [])
-    model_name = data.get('model', 'google/gemini-2.5-flash')
+    model_name = normalize_model_name(data.get('model'))
     single_batch = bool(data.get('single_batch'))
-    
-    # Normalize model names to OpenRouter IDs
-    if model_name == 'gemini-2.5-flash':
-        model_name = 'google/gemini-2.5-flash'
-    elif model_name == 'gemini-2.5-pro':
-        model_name = 'google/gemini-2.5-pro'
-    elif model_name == 'gemini-2.0-flash':
-        model_name = 'google/gemini-2.0-flash'
         
     # API key from headers, request body, or environment
-    api_key = request.headers.get('X-Gemini-Key') or data.get('api_key') or os.getenv('OPENROUTER_API_KEY') or os.getenv('GEMINI_API_KEY')
+    api_key = get_openrouter_api_key(data)
     
     if not api_key:
         return jsonify({'error': 'OpenRouter API Key is missing. Please configure OPENROUTER_API_KEY in your .env file.'}), 400
