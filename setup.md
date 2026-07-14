@@ -2,7 +2,7 @@
 
 This guide walks you through setting up a new instance of the **Heading Matcher (V2)** application. The application architecture consists of two main parts:
 1. **Serverless Transcription Service**: Deployed on [Modal](https://modal.com) using `faster-whisper` running on an NVIDIA T4 GPU.
-2. **Flask Web Application**: The frontend and orchestration backend, which calls Modal for transcription and OpenRouter (Gemini) for chunking and keypoint extraction.
+2. **Flask Web Application**: The frontend and orchestration backend, which calls Modal for transcription and OpenRouter for chunking and keypoint extraction. GPT-5.6 Luna is the default AI model.
 
 ---
 
@@ -11,7 +11,7 @@ This guide walks you through setting up a new instance of the **Heading Matcher 
 Before starting, ensure you have:
 - **Python 3.10 or 3.11** installed.
 - A **Modal Account** ([Sign up at modal.com](https://modal.com/)).
-- An **OpenRouter API Key** (or direct Gemini API Key) to run smart chunking.
+- An **OpenRouter API Key** to run smart chunking and keypoint generation.
 
 ---
 
@@ -67,8 +67,11 @@ cp .env.example .env
 ### 2. Update Environment Variables
 Open the `.env` file and fill in your keys:
 ```env
-# OpenRouter API Key for Gemini models (Smart Chunking & Refinements)
+# OpenRouter API Key for Smart Chunking & Refinements
 OPENROUTER_API_KEY=your_actual_open_router_api_key_here
+
+# Optional model override (GPT-5.6 Luna is the application default)
+OPENROUTER_MODEL=openai/gpt-5.6-luna
 
 # The FastAPI URL copied from your Modal deployment output (with /transcribe path appended)
 MODAL_TRANSCRIBE_URL=https://<your-modal-username>--whisper-transcribe-fastapi-app.modal.run/transcribe
@@ -99,6 +102,16 @@ pip install -r requirements.txt
 python app.py
 ```
 By default, the server runs on `http://localhost:5000`. Open this address in your web browser.
+
+### 4. Run the Offline Regression Suite
+```bash
+python -m unittest discover -s tests -v
+```
+
+The tests mock OpenRouter and do not consume API credits. They validate the template catalog, Luna defaults, AI endpoints, UI model controls, and timestamped sentence splitting.
+
+### Template Catalog
+`templates.json` is the canonical visual-template source for both the AI prompt and the Key Points dropdown. Update that file when adding or revising a template; no separate frontend list needs to be maintained.
 
 ---
 

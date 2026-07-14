@@ -1,107 +1,98 @@
-# Project Documentation: PPSimplify
+# PPSimplify Developer Guide
 
-PPSimplify is a local developer/user utility built in Python (Flask) and Vanilla JS/CSS that extracts audio tracks from video files on the client's device and transcribes the speech locally using `faster-whisper`, yielding interactive word-level timestamps. It also contains a Smart Chunker module to segment speech transcripts into topical sessions using Gemini AI.
+PPSimplify is a Flask and Vanilla JavaScript application that converts media into timestamped curriculum content. It extracts audio with FFmpeg, transcribes speech through Modal-hosted `faster-whisper`, groups the transcript into topical sessions through OpenRouter, and generates editable curriculum highlights and visual-template mappings.
 
----
+GPT-5.6 Luna (`openai/gpt-5.6-luna`) is the default OpenRouter model. Existing Gemini options remain available as fallbacks.
 
-## 📂 Project Structure
+## Project Structure
 
 ```text
 Heading_Matcher_v2/
-├── app.py                  # Flask server, native OS dialog helpers, transcription, and chunking APIs
-├── requirements.txt        # Python package dependencies
-├── .env.example            # Template configuration for environment variables
-├── .env                    # Local environment variables containing Gemini API keys (git ignored)
-├── templates/
-│   ├── index.html          # Clean, premium, non-technical dashboard layout
-│   └── chunking.html       # Visual workspace for editing transcript chapters/sessions
-├── static/
-│   ├── css/
-│   │   └── style.css       # Design variables, UI styling, and layout coordinates
-│   └── js/
-│       ├── app.js          # Core frontend controller (pipeline orchestration & player sync)
-│       └── chunking.js     # Chunker state engine, shift boundaries, and Gemini calls
-├── uploads/                # Directory containing only extracted audio files (e.g. *.m4a)
-├── transcriptions/         # Directory containing transcripts (*.json), session chunks (*_chunks.json), etc.
-└── markdown_files/         # Contains developer docs, visuals guides, and prompts templates
-    ├── doc.md              # This developer documentation file
-    ├── Visuals_guide.md    # Guide for visual layouts
-    ├── reinforced_visuals.md # Updated visuals styling guides
-    ├── keypoints_initial.md  # LLM prompt template for keypoints generation
-    ├── keypoints_refinement.md # LLM prompt template for keypoints refinement
-    └── session_chunking.md   # LLM prompt template for session chunking
+|-- app.py                         Flask routes, persistence, AI orchestration, DOCX export
+|-- templates.json                Canonical visual-template catalog and constraints
+|-- transcribe_modal.py            Modal T4 GPU transcription service
+|-- requirements.txt               Flask application dependencies
+|-- setup.md                       Local and deployment setup guide
+|-- templates/
+|   |-- index.html                 Media-processing dashboard
+|   |-- chunking.html              Topical session editor
+|   `-- keypoints.html             Curriculum and visual-mapping editor
+|-- static/
+|   |-- css/style.css              Shared application design system
+|   `-- js/
+|       |-- app.js                 Upload, extraction, transcription, and playback
+|       |-- chunking.js            Session grouping and manual corrections
+|       `-- keypoints.js           Keypoint generation, template editing, and exports
+|-- markdown_files/
+|   |-- session_chunking.md        Session grouping prompt
+|   |-- keypoints_initial.md       Initial curriculum-generation prompt
+|   `-- keypoints_refinement.md    Feedback-driven refinement prompt
+`-- tests/test_app_integration.py  Offline integration regression suite
 ```
 
----
+## Processing Flow
 
-## ⚙️ Backend Architecture (`app.py`)
+1. The user selects or uploads a media file.
+2. FFmpeg stream-copies or transcodes its audio track.
+3. The Flask application calls Modal through the SDK, then the HTTP endpoint if necessary. A locally installed `faster-whisper` is the final optional fallback.
+4. Whisper returns segment and word timestamps, stored as `transcriptions/<filename>.json`.
+5. The application reconstructs timestamped sentences from word punctuation.
+6. OpenRouter groups sentences into topical sessions. Batching and reconciliation preserve chronological order and assign each sentence exactly once.
+7. GPT-5.6 Luna generates curriculum headings and visual mappings constrained by `templates.json`.
+8. Users refine the sessions and visual content before exporting JSON or DOCX.
 
-The backend is built using Flask, running locally on port `5000`.
+## Canonical Template Catalog
 
-### Core Features
-1. **Environment Configuration**: Utilizes `python-dotenv` to load the `GEMINI_API_KEY` from a local `.env` configuration file.
-2. **Native OS File Selector**: Uses a native Python Tkinter script executed via subprocess (`/api/select-file`) to open the native OS file explorer, avoiding security restrictions of web-browser directory traversal.
-3. **FFmpeg Subprocess Extraction**: Natively extracts audio from selected videos.
-   * *Mode 1 (Original Quality)*: Fast stream-copying (saves as `.m4a` or `.webm` depending on container codec).
-   * *Mode 2 (MP3 Format)*: Transcodes the audio stream to MP3.
-4. **Local Whisper Transcription**: Utilizes `faster-whisper` for fast inference using CTranslate2.
-   * Transcribes audio with `word_timestamps=True` to extract millisecond word ranges.
-   * Saves transcripts locally as `<filename>.json` in the `transcriptions/` folder.
-5. **Sentence-Level Splitting Helper**: Reconstructs complete sentence blocks from Whisper word arrays using punctuation-based regex splits (`.`, `?`, `!`), automatically ignoring common abbreviations (like `Mr.`, `Dr.`, `vs.`, `segment 2`, etc.). It maps the sentence `start` time to the first word's start, and `end` time to the last word's end.
-6. **Gemini Structured Grouping**: Connects to the Gemini API (`gemini-2.5-flash` or `gemini-2.0-flash`) using strict JSON schemas (`responseMimeType: "application/json"`) to partition sentence lists into topical chapters (each containing roughly 4-5 sentences).
- 
-### API Endpoints
-* `POST /api/select-file`: Triggers native Windows file dialog to select a video.
-* `POST /api/extract`: Runs FFmpeg subprocess to extract audio.
-* `POST /api/transcribe`: Triggers local Whisper model transcription on a specific audio file.
-* `GET /api/transcript/<filename>`: Retrieves the saved transcript JSON from the `transcriptions/` folder.
-* `GET /api/files`: Returns lists of all extracted audio files (and checks whether `<audio_file>.json` transcript exists in `transcriptions/`).
-* `GET /api/settings` & `POST /api/settings`: Validates and saves custom FFmpeg paths in `config.json`.
-* `GET /chunking`: Renders the new Smart Chunker page template.
-* `GET /api/sentences/<filename>`: Extracts and parses sentence subchunks from Whisper transcripts.
-* `POST /api/chunk-sessions`: Accepts sentences list, prompts Gemini API with JSON schema structure, and returns grouped session arrays.
-* `GET /api/chunks/<filename>` & `POST /api/save-chunks/<filename>`: Handles local persistence for the session chunk JSON configurations (`<filename>_chunks.json` inside the `transcriptions/` folder).
+`templates.json` is the only maintained template catalog. The backend validates it, `/api/templates` exposes it to the browser, the Key Points dropdown is built from it, and the complete catalog is injected into keypoint prompts. Template identifiers are constrained through the OpenRouter JSON schema, so generated `template_name` values must exactly match catalog keys.
 
----
+Manual-only `Name aston` and `Custom Template` options remain available in the editor but are not AI-generated catalog values.
 
-## 🎨 Frontend Architecture
+## Configuration
 
-The frontend is implemented with a premium glassmorphic theme designed for non-technical users.
+```env
+OPENROUTER_API_KEY=sk-or-your-key
+OPENROUTER_MODEL=openai/gpt-5.6-luna
+MODAL_TRANSCRIBE_URL=https://your-modal-endpoint/transcribe
+```
 
-### Core Features
-1. **Automated Pipeline Flow**:
-   * Selection -> Preparing workspace -> Extracting audio -> Converting speech to text -> Refreshing Library.
-2. **Interactive Audio Transcript Sync (Dashboard)**:
-   * Listens to the `<audio>` player's `timeupdate` event.
-   * Highlights the current segment and current word in real-time, scrolling the active text into view.
-3. **Click-to-Seek Playback**:
-   * Clicking any word span updates the player's `currentTime` to the word's `start` time and initiates playback.
-4. **Smart Chunker Workspace**:
-   * Displays the audio player alongside a vertical list of parsed sentences (subchunks).
-   * Displays grouped sessions as cards containing editable titles and summaries.
-   * **Boundary Shift Operations**: Boundary sentences (the first sentence of session $i$ or the last sentence of session $i$) can be shifted to adjacent sessions using simple arrow buttons, dynamically modifying lists and instantly updating session start/end times.
-   * **Manual Structural Alterations**: Allows users to split sessions at any sentence ("Split Here" icon on hover) or combine sessions ("Merge with Next" icon in headers).
-   * **Playback Syncing**: Playback highlights the active sentence in both columns and seeks to start times on session click.
-   * **Exporting**: Allows immediate local browser download of session configurations as structured JSON files.
+`OPENROUTER_MODEL` is optional. When omitted, the application defaults to `openai/gpt-5.6-luna`. `GEMINI_API_KEY` and the legacy `X-Gemini-Key` request header remain supported for backward compatibility, but new clients use `OPENROUTER_API_KEY` and `X-OpenRouter-Key`.
 
----
+## Persistence
 
-## 🚀 How to Run Locally
+The server uses filesystem JSON rather than a database:
 
-1. Open PowerShell or Command Prompt in the project directory.
-2. Activate the virtual environment:
-   ```powershell
-   .\venv\Scripts\activate
-   ```
-3. Install dependencies:
-   ```powershell
-   pip install -r requirements.txt
-   ```
-4. Configure your Gemini API Key:
-   * Copy `.env.example` to `.env`.
-   * Open `.env` and set your key: `GEMINI_API_KEY=AIzaSy...`
-5. Run the Flask application:
-   ```powershell
-   python app.py
-   ```
-6. Open your browser and go to **[http://127.0.0.1:5000](http://127.0.0.1:5000)**.
+- `uploads/<filename>` stores extracted or uploaded audio.
+- `transcriptions/<filename>.json` stores the raw transcript.
+- `transcriptions/<filename>_chunks.json` stores sessions, keypoints, and visuals.
+- `transcriptions/<filename>_deleted_sentences.json` stores removed transcript sentences.
+- `config.json` stores the optional FFmpeg path.
+
+The browser mirrors transcripts, chunks, deleted sentences, and its processed-file registry in `localStorage`. This provides continuity in stateless environments such as Vercel.
+
+## Important API Routes
+
+- `GET /api/config`: client environment and default AI model.
+- `GET /api/templates`: canonical template catalog and identifiers.
+- `POST /api/chunk-sessions`: schema-validated topical grouping.
+- `POST /api/generate-session-keypoints`: curriculum and visual-template generation.
+- `POST /api/validate-key`: OpenRouter credential validation.
+- `POST /api/save-chunks/<filename>`: session and keypoint persistence.
+- `POST /api/export-docx/<filename>`: timestamp-aware curriculum export.
+
+## Verification
+
+The regression suite mocks OpenRouter and consumes no API credits:
+
+```powershell
+python -m unittest discover -s tests -v
+```
+
+JavaScript syntax can be checked with:
+
+```powershell
+node --check static/js/app.js
+node --check static/js/chunking.js
+node --check static/js/keypoints.js
+```
+
+Live OpenRouter and Modal calls require valid credentials and are intentionally outside the offline regression suite.
