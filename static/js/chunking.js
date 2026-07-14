@@ -9,9 +9,9 @@ let deletedSentences = [];
 
 // DOM Elements
 const selectFileEl = document.getElementById('chunker-file-select');
-const apiKeyInput = document.getElementById('gemini-api-key-input');
+const apiKeyInput = document.getElementById('openrouter-api-key-input');
 const toggleKeyBtn = document.getElementById('toggle-key-visibility');
-const modelSelect = document.getElementById('gemini-model-select');
+const modelSelect = document.getElementById('ai-model-select');
 const btnRun = document.getElementById('btn-run-chunker');
 const workspaceEl = document.getElementById('chunker-workspace');
 const noFileScreen = document.getElementById('no-file-screen');
@@ -31,11 +31,27 @@ const deletedSentencesWrapper = document.getElementById('deleted-sentences-wrapp
 
 // Setup
 document.addEventListener('DOMContentLoaded', () => {
+    loadAIConfig();
     setupApiKeyValidation();
     loadFilesDropdown();
     setupEventListeners();
     setupLocalMediaLoader();
 });
+
+async function loadAIConfig() {
+    try {
+        const resp = await fetch('/api/config');
+        if (!resp.ok) return;
+        const config = await resp.json();
+        const defaultModel = config.default_ai_model;
+        if (defaultModel && !Array.from(modelSelect.options).some(option => option.value === defaultModel)) {
+            modelSelect.add(new Option(defaultModel, defaultModel));
+        }
+        if (defaultModel) modelSelect.value = defaultModel;
+    } catch (err) {
+        console.warn('Could not load AI configuration:', err);
+    }
+}
 
 // Fetch all transcribed files to populate select dropdown
 async function loadFilesDropdown() {
@@ -139,8 +155,8 @@ function setupEventListeners() {
         }
     });
 
-    // Run Gemini Auto Chunker
-    btnRun.addEventListener('click', runGeminiChunking);
+    // Run AI Auto Chunker
+    btnRun.addEventListener('click', runAIChunking);
 
     // Save Chunks to Server
     btnSaveSessions.addEventListener('click', saveChunksToServer);
@@ -851,7 +867,7 @@ function reconcileSessions(sessions, sentencePayload) {
 }
 
 function setupApiKeyValidation() {
-    const apiKeyInput = document.getElementById('gemini-api-key-input');
+    const apiKeyInput = document.getElementById('openrouter-api-key-input');
     const statusEl = document.getElementById('api-key-status');
     if (!apiKeyInput || !statusEl) return;
 
@@ -963,8 +979,8 @@ function normalizeChunkSessions(rawSessions) {
     }));
 }
 
-// Call Gemini API to construct sessions
-async function runGeminiChunking() {
+// Call the selected OpenRouter model to construct sessions
+async function runAIChunking() {
     if (!activeFile || sentences.length === 0) return;
     
     const keyOverride = apiKeyInput.value.trim();
@@ -1003,7 +1019,7 @@ async function runGeminiChunking() {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
-                    'X-Gemini-Key': keyOverride
+                    'X-OpenRouter-Key': keyOverride
                 },
                 body: JSON.stringify({
                     sentences: batchToChunk,
@@ -1015,7 +1031,7 @@ async function runGeminiChunking() {
             const data = await parseJsonResponse(resp, 'Auto-Chunk');
             
             if (!resp.ok) {
-                throw new Error(data.error || 'Gemini API processing failed.');
+                throw new Error(data.error || 'AI model processing failed.');
             }
             
             if (replaceCount > 0) {
@@ -1030,7 +1046,7 @@ async function runGeminiChunking() {
         // Re-render
         renderSessions();
         markDirty();
-        alert('Gemini smart chunking completed successfully!');
+        alert('AI smart chunking completed successfully!');
         
     } catch (err) {
         console.error(err);

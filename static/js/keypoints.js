@@ -7,12 +7,13 @@ let isDirty = false;
 let duration = 0;
 let currentSessionIndex = 0;
 let deletedSentences = [];
+let templateCatalog = {};
 
 // DOM Elements
 const activeFileDisplay = document.getElementById('active-file-display');
-const apiKeyInput = document.getElementById('gemini-api-key-input');
+const apiKeyInput = document.getElementById('openrouter-api-key-input');
 const toggleKeyBtn = document.getElementById('toggle-key-visibility');
-const modelSelect = document.getElementById('gemini-model-select');
+const modelSelect = document.getElementById('ai-model-select');
 const btnRunAll = document.getElementById('btn-run-all-keypoints');
 const readOnlySessionsWrapper = document.getElementById('read-only-sessions-wrapper');
 const keypointsListWrapper = document.getElementById('keypoints-list-wrapper');
@@ -22,14 +23,15 @@ const btnExportDocx = document.getElementById('btn-export-docx');
 const sessionsCountBadge = document.getElementById('sessions-count-badge');
 
 // Initialize
-document.addEventListener('DOMContentLoaded', () => {
+document.addEventListener('DOMContentLoaded', async () => {
+    await loadTemplateCatalog();
     setupApiKeyValidation();
     parseQueryParams();
     setupEventListeners();
 });
 
 function setupApiKeyValidation() {
-    const apiKeyInput = document.getElementById('gemini-api-key-input');
+    const apiKeyInput = document.getElementById('openrouter-api-key-input');
     const statusEl = document.getElementById('api-key-status');
     if (!apiKeyInput || !statusEl) return;
 
@@ -131,6 +133,62 @@ function setupApiKeyValidation() {
             }, 800);
         }
     });
+}
+
+async function loadTemplateCatalog() {
+    try {
+        const resp = await fetch('/api/templates');
+        const data = await resp.json();
+        if (!resp.ok) throw new Error(data.error || 'Failed to load templates');
+
+        templateCatalog = data.templates || {};
+        const defaultModel = data.default_ai_model;
+        if (defaultModel && !Array.from(modelSelect.options).some(option => option.value === defaultModel)) {
+            modelSelect.add(new Option(defaultModel, defaultModel));
+        }
+        if (defaultModel) modelSelect.value = defaultModel;
+    } catch (err) {
+        console.error('Could not load template catalog:', err);
+        templateCatalog = {
+            'Face Only': {
+                category: 'Default / Fallback',
+                density: 'Low / Very Low'
+            }
+        };
+    }
+}
+
+function buildTemplateOptions(selectedTemplate = 'Face Only') {
+    const groups = new Map();
+
+    Object.entries(templateCatalog).forEach(([templateId, template]) => {
+        const category = template.category || 'Other';
+        if (!groups.has(category)) groups.set(category, []);
+        groups.get(category).push({ templateId, template });
+    });
+
+    let options = '';
+    groups.forEach((templates, category) => {
+        options += `<optgroup label="${escapeHtml(category)}">`;
+        templates.forEach(({ templateId, template }) => {
+            const friendlyName = template.name ? ` — ${template.name}` : '';
+            const density = template.density ? ` (${template.density})` : '';
+            options += `<option value="${escapeHtml(templateId)}">${escapeHtml(templateId + friendlyName + density)}</option>`;
+        });
+        options += '</optgroup>';
+    });
+
+    if (selectedTemplate && !Object.prototype.hasOwnProperty.call(templateCatalog, selectedTemplate)
+        && !['Name aston', 'Custom Template'].includes(selectedTemplate)) {
+        options += `<optgroup label="Legacy / Imported"><option value="${escapeHtml(selectedTemplate)}">${escapeHtml(selectedTemplate)}</option></optgroup>`;
+    }
+
+    options += '<optgroup label="Manual Overrides">'
+        + '<option value="Name aston">Name aston</option>'
+        + '<option value="Custom Template">Custom Template</option>'
+        + '</optgroup>';
+
+    return options;
 }
 
 // Parse URL Query Params
@@ -790,68 +848,7 @@ function renderKeypointsList() {
                                     <span id="visual-template-badge-${index}" class="badge badge-info" style="font-size: 0.7rem; background: rgba(99, 102, 241, 0.2); border-color: rgba(99, 102, 241, 0.4); text-transform: none; padding: 2px 6px; border-radius: 4px;">${escapeHtml(session.visuals?.template_name || 'Face Only')}</span>
                                     <span id="ai-suggested-badge-${index}" class="badge badge-success" style="font-size: 0.7rem; text-transform: none; padding: 2px 6px; border-radius: 4px;" title="AI suggested template for this content">AI Suggested: ${escapeHtml(session.visuals?.ai_suggested_template || session.visuals?.template_name || 'Face Only')}</span>
                                 </div>
-                                <select class="premium-select visual-template-select" id="template-select-${index}" style="padding: 6px 12px; font-size: 0.8rem; margin-top: 4px; border-radius: 8px; height: auto;">
-                                    <optgroup label="Default / Intro">
-                                        <option value="Face Only">Face Only</option>
-                                        <option value="Name aston">Name aston</option>
-                                        <option value="Custom Template">Custom Template</option>
-                                    </optgroup>
-                                    <optgroup label="Type / Categorization Templates">
-                                        <option value="Type Template 1">Type Template 1 (Low Density)</option>
-                                        <option value="Type Template 2">Type Template 2 (Med-High Density)</option>
-                                        <option value="Type Template No 16">Type Template No 16 (Split Sequential)</option>
-                                        <option value="Type Template No 17">Type Template No 17 (Split Deep-Dive / Image)</option>
-                                        <option value="Type Template No 18">Type Template No 18 (Split Q&A)</option>
-                                        <option value="Type Template No 18 OG">Type Template No 18 OG (Full-Screen Q&A)</option>
-                                        <option value="Type Template No 20">Type Template No 20 (Split Two Concepts)</option>
-                                        <option value="Type Template No 20 OG">Type Template No 20 OG (Full Two Concepts)</option>
-                                        <option value="Type Template No 21">Type Template No 21 (Split Three Circles)</option>
-                                        <option value="Type Template No 21 OG">Type Template No 21 OG (Full Three Circles + Callouts)</option>
-                                        <option value="Type Template No 22">Type Template No 22 (Split 5-7 Categories)</option>
-                                        <option value="Type Template No 24">Type Template No 24 (Glassbox Percentage)</option>
-                                        <option value="Type Template No 25">Type Template No 25 (Logo / Brand Grid)</option>
-                                        <option value="Type Template No 26">Type Template No 26 (Single Question Box)</option>
-                                        <option value="Type Template No 27">Type Template No 27 (Definition Plate / Image)</option>
-                                        <option value="Type Template No 28">Type Template No 28 (Quote Plate)</option>
-                                        <option value="Type Template No 29">Type Template No 29 (Takeaway Plate)</option>
-                                        <option value="Type Template No 30">Type Template No 30 (Horizontal Box Plate)</option>
-                                        <option value="Type Template No 31">Type Template No 31 (Vertical Stacked Boxes)</option>
-                                        <option value="Type Template No 32">Type Template No 32 (Fact / Bio Plate)</option>
-                                        <option value="Type Template No 33">Type Template No 33 (Evidence / Finding Plate)</option>
-                                        <option value="Type Template No 35">Type Template No 35 (Glassbox Contrast)</option>
-                                        <option value="Type Template No 36">Type Template No 36 (Heavy Text Plate)</option>
-                                        <option value="Type Template No 40">Type Template No 40 (Case Study / Story Image)</option>
-                                        <option value="Type Template No 41">Type Template No 41 (Flat Pointers List)</option>
-                                    </optgroup>
-                                    <optgroup label="Process / Sequential Templates">
-                                        <option value="Process Template 1">Process Template 1 (Low Density)</option>
-                                        <option value="Process Template 2">Process Template 2 (Medium Density)</option>
-                                        <option value="Process Template 3">Process Template 3 (High Density / Vertical)</option>
-                                        <option value="Process Template 4">Process Template 4 (Split Process Flow)</option>
-                                    </optgroup>
-                                    <optgroup label="Differentiation / Contrast Templates">
-                                        <option value="Differentiation Template 1">Differentiation Template 1 (Text Table)</option>
-                                        <option value="Differentiation Template 2">Differentiation Template 2 (Image Contrast)</option>
-                                    </optgroup>
-                                    <optgroup label="Timeline Templates">
-                                        <option value="Timeline Template 1">Timeline Template 1 (Low Density Milestones)</option>
-                                        <option value="Timeline Template 2">Timeline Template 2 (Detailed Progression)</option>
-                                    </optgroup>
-                                    <optgroup label="Hierarchy Templates">
-                                        <option value="Hierarchy Template 1">Hierarchy Template 1 (Node Tree)</option>
-                                    </optgroup>
-                                    <optgroup label="Graph / Quantitative Templates">
-                                        <option value="Graph Template 1">Graph Template 1 (Line Graph)</option>
-                                        <option value="Graph Template 2">Graph Template 2 (Bar Plot)</option>
-                                        <option value="Graph Template 3">Graph Template 3 (Pie Chart)</option>
-                                    </optgroup>
-                                    <optgroup label="Misc / Navigation Templates">
-                                        <option value="Importance Template">Importance Template (takeaways/outcomes)</option>
-                                        <option value="IMT Mind Map">IMT Mind Map (Module structure)</option>
-                                        <option value="NMIMS Mind Map">NMIMS Mind Map (Progress tracker)</option>
-                                        <option value="Soft Skills Template">Soft Skills Template (Simple concepts)</option>
-                                    </optgroup>
-                                </select>
+                                <select class="premium-select visual-template-select" id="template-select-${index}" style="padding: 6px 12px; font-size: 0.8rem; margin-top: 4px; border-radius: 8px; height: auto;">${buildTemplateOptions(session.visuals?.template_name || 'Face Only')}</select>
                             </div>
                             <div style="margin-top: 12px; display: flex; align-items: center; gap: 6px;">
                                 <input type="checkbox" id="graphics-required-check-${index}" style="accent-color: var(--accent-primary);" ${(session.visuals && session.visuals.graphics_required) ? 'checked' : ''}>
@@ -1301,7 +1298,7 @@ function markDirty() {
 async function runAllKeypointsGeneration() {
     if (sessions.length === 0) return;
     
-    if (!confirm('This will call Gemini to generate headings and subheadings for ALL chunks sequentially. Any existing highlights will be overwritten. Continue?')) {
+    if (!confirm('This will call the selected AI model to generate headings and subheadings for ALL chunks sequentially. Any existing highlights will be overwritten. Continue?')) {
         return;
     }
 
@@ -1411,14 +1408,14 @@ async function executeSessionGeneration(sessionIdx, feedback = '') {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
-                'X-Gemini-Key': keyOverride
+                'X-OpenRouter-Key': keyOverride
             },
             body: JSON.stringify(payload)
         });
 
         const data = await resp.json();
         if (!resp.ok) {
-            throw new Error(data.error || 'Gemini API call failed');
+            throw new Error(data.error || 'AI model call failed');
         }
 
         // Set returned heading, subheadings, text_content, and visuals

@@ -1258,7 +1258,7 @@ def chunk_sessions():
     sessions = []
     
     # Helper to chunk a specific batch of sentences using OpenRouter API
-    def call_gemini_chunker(batch_sentences):
+    def call_ai_chunker(batch_sentences):
         sentences_str = ""
         for s in batch_sentences:
             sentences_str += f"[{s['id']}] {s['text']}\n"
@@ -1324,7 +1324,7 @@ def chunk_sessions():
     if single_batch:
         try:
             try:
-                raw_sessions = call_gemini_chunker(sentences)
+                raw_sessions = call_ai_chunker(sentences)
                 reconciled = reconcile_chunks(raw_sessions, sentences)
                 return jsonify({'sessions': reconciled}), 200
             except FileNotFoundError as tmpl_err:
@@ -1368,7 +1368,7 @@ def chunk_sessions():
             
         try:
             try:
-                new_sessions = call_gemini_chunker(batch_to_chunk)
+                new_sessions = call_ai_chunker(batch_to_chunk)
             except FileNotFoundError as tmpl_err:
                 return jsonify({'error': f'Prompt template file missing on server: {str(tmpl_err)}. Make sure the markdown_files/ directory is present.'}), 500
             sessions.extend(new_sessions)

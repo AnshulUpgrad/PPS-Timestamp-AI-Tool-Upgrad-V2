@@ -48,7 +48,7 @@
                 <div class="config-group">
                     <label class="option-title">OpenRouter API Key (Optional Override)</label>
                     <div class="api-key-input-wrapper">
-                        <input type="password" id="gemini-api-key-input" placeholder="Server .env key will be used if empty" class="path-input">
+                        <input type="password" id="openrouter-api-key-input" placeholder="Server .env key will be used if empty" class="path-input">
                         <button class="btn-toggle-visibility" id="toggle-key-visibility" title="Show/Hide Key">
                             <i class="fa-solid fa-eye-slash"></i>
                         </button>
@@ -58,8 +58,9 @@
                 <div class="config-group">
                     <label class="option-title">Model</label>
                     <div class="select-wrapper">
-                        <select id="gemini-model-select" class="premium-select">
-                            <option value="google/gemini-2.5-flash" selected>Gemini 2.5 Flash (Recommended)</option>
+                        <select id="ai-model-select" class="premium-select">
+                            <option value="openai/gpt-5.6-luna" selected>GPT-5.6 Luna (Recommended)</option>
+                            <option value="google/gemini-2.5-flash">Gemini 2.5 Flash</option>
                             <option value="google/gemini-2.5-pro">Gemini 2.5 Pro</option>
                             <option value="google/gemini-2.0-flash">Gemini 2.0 Flash</option>
                         </select>
