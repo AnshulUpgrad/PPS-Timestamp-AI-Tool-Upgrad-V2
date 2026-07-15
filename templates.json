@@ -1,4 +1,312 @@
 {
+  "__guidelines": {
+    "source": "Reinforced selection and layout guidance merged from markdown_files/reinforced_visuals.md. Existing per-template constraints remain authoritative for field placement and numeric limits.",
+    "precedence": [
+      "Follow each template's constraints for exact word counts, line limits, permitted fields, and content placement.",
+      "Use these reinforced guidelines to choose the template, understand its layout intent, and avoid unsuitable templates.",
+      "If reinforced guidance conflicts with a template constraint, the template constraint wins."
+    ],
+    "core_decision_rules": [
+      "Prefer Face Only for narrative, anecdotal, conversational, transitional, or visually unstructured speech.",
+      "Do not force a graphic when it adds no direct educational value.",
+      "Match the template density to the amount and structure of source content; do not fill unused capacity with invented material.",
+      "Use only facts, labels, relationships, quantities, and images explicitly supported by the transcript.",
+      "Prefer the simplest template that can accurately hold the content."
+    ],
+    "formatting_rules": {
+      "plate_heading": "ALL CAPS, as short as possible, normally no more than 2 lines and 32 characters unless the selected template is stricter or forbids a heading.",
+      "subheadings": "Title Case. Every generated content block should have a subheading unless the selected template explicitly forbids subheadings or headings.",
+      "description_text": "Sentence case. Prefer 10-15 words or fewer per sentence and no more than 2 sentences per paragraph unless the selected template is stricter.",
+      "icons": "Use line icons only, never black-fill icons. Numbers or short forms may replace icons only where the selected template permits it.",
+      "hard_limits": "Never exceed a template's own word, line, item, point, or box limits. Split content into another plate when the template specifies overflow behavior."
+    },
+    "image_policy": {
+      "default": "Do not assume, invent, or request image assets.",
+      "image_capable_templates": [
+        "Template No 17 Split Screen",
+        "Template No 17 OG",
+        "Template No 25 Glass Box",
+        "Template No 27",
+        "Type Template No 40",
+        "Differentiation Template 2"
+      ],
+      "conditional_replacement": "Timeline Template 1 may replace milestone text with an explicitly supported image.",
+      "requirement": "When an image-capable template is selected, identify the specific supported asset, subject, logo, person, or case-study image in why_chosen/content; do not fabricate an asset."
+    },
+    "variant_policy": {
+      "default": "Prefer Split Screen over the corresponding OG/full-screen variant.",
+      "use_og_only_when": [
+        "The graphic is too dense to share space with the speaker.",
+        "The content is a standalone reference plate with no accompanying narration.",
+        "The script or producer explicitly requests full-screen or OG treatment."
+      ],
+      "justification": "Whenever an OG variant is selected, why_chosen must state why the Split Screen variant was insufficient."
+    },
+    "relationship_routing": {
+      "comparison": "Use Differentiation templates only for exactly two parallel, non-ordered sides.",
+      "process": "Use Process templates when order, progression, cause-and-effect, before/after, or one action leading to another is present.",
+      "timeline": "Use Timeline templates only for explicit chronological milestones or progression over time.",
+      "hierarchy": "Use Hierarchy Template 1 only for parent-child, taxonomy, organizational, or architectural relationships.",
+      "graphs": "Use Graph templates only when explicit numeric data supports the selected line, bar, or pie relationship."
+    },
+    "downweighted_policy": {
+      "templates": [
+        "Type Template No 30",
+        "Template No 31",
+        "Type Template No 32",
+        "Type Template No 33",
+        "Type Template No 35",
+        "Type Template No 36"
+      ],
+      "rule": "Actively penalize these high-capacity templates. Use them only when dense source text cannot be simplified into standard Type, Process, Differentiation, or Timeline templates.",
+      "justification": "why_chosen must name the simpler alternative considered and explain why it could not hold the supported content."
+    },
+    "timestamp_rules": [
+      "Assign content.heading_timestamp independently from the point timestamps, using the exact word-level moment when the heading should appear.",
+      "Assign every generated item/detail the word-level start timestamp where that idea begins.",
+      "The earliest item/detail must begin after content.heading_timestamp; the delay is selected from the spoken content and is not a fixed duration.",
+      "Order all generated items/details chronologically.",
+      "Keep every timestamp inside the current session's start/end range.",
+      "Do not reuse one timestamp for unrelated items merely because they share a plate.",
+      "Do not invent timestamps for content not grounded in the transcript."
+    ],
+    "output_mapping": {
+      "content.title": "The plate heading or primary on-screen title; leave empty when the selected template forbids a heading.",
+      "content.heading_timestamp": "The exact word-level time when the plate heading appears, independently editable from the first point.",
+      "content.items": "Flat labels, steps, milestones, pointers, categories, or short statements. Each entry uses value and timestamp.",
+      "content.details": "Structured label/value pairs such as a category plus description, question plus answer, comparison side plus explanation, statistic plus context, or graph label plus value.",
+      "subheadings": "Curriculum highlights separate from the visual-template payload; keep them concise and do not duplicate visual content unnecessarily.",
+      "why_chosen": "Explain the transcript signal, density fit, layout fit, and any OG, image, or downweighted-template justification."
+    },
+    "common_mistakes": [
+      "Choosing a graphic template for narrative or transitional speech instead of Face Only.",
+      "Choosing an OG variant without explaining why Split Screen cannot work.",
+      "Using Differentiation for sequential, causal, or before/after content.",
+      "Using a graph without explicit source numbers or omitting the graph source.",
+      "Inventing images, icons, statistics, labels, subpoints, or relationships not present in the transcript.",
+      "Using a downweighted heavy-text plate for ordinary lecture points.",
+      "Exceeding a template's capacity instead of splitting the material across plates.",
+      "Adding headings, descriptions, subheadings, or pointers to a template that explicitly forbids them."
+    ],
+    "template_specific_guidance": {
+      "Face Only": {
+        "layout_intent": "Speaker-only default with no graphic overlay.",
+        "selection_cues": ["storytelling", "personal anecdote", "transition", "conversational explanation", "no stable visual structure"],
+        "avoid_when": "A clear supported list, comparison, process, timeline, hierarchy, definition, statistic, or other visual structure is present."
+      },
+      "Template 1": {
+        "layout_intent": "Low-density categorization with short labels and compact differentiators.",
+        "selection_cues": ["2-5 types", "quick overview", "short labels"],
+        "avoid_when": "Each type requires a paragraph or several detailed supporting points."
+      },
+      "Template 2": {
+        "layout_intent": "Denser categorization where every type needs meaningful supporting explanation.",
+        "selection_cues": ["detailed concept breakdown", "multiple supported details per type"],
+        "avoid_when": "The source provides only labels or one short differentiator per type."
+      },
+      "Template No 16 Split Screen": {
+        "layout_intent": "Speaker-left sequential concept or step treatment with compact descriptions.",
+        "selection_cues": ["up to 4 steps", "ordered concepts", "brief bullets"],
+        "avoid_when": "The points require deep explanations or supporting images."
+      },
+      "Template No 16 OG": {
+        "layout_intent": "Full-screen version of the compact sequential-step treatment.",
+        "selection_cues": ["dense step graphic", "explicit full-screen instruction"],
+        "avoid_when": "The Split Screen version has enough room."
+      },
+      "Template No 17 Split Screen": {
+        "layout_intent": "Numbered deep-dive points with room for expanded explanation or a supported image.",
+        "selection_cues": ["numbered points", "one point needs elaboration", "supported image or graphic"],
+        "avoid_when": "All points are short enough for Template No 16 or a standard Type template."
+      },
+      "Template No 17 OG": {
+        "layout_intent": "Full-screen deep-dive point treatment when the visual/explanation cannot share space with the speaker.",
+        "avoid_when": "The Split Screen version has enough room."
+      },
+      "Template No 18 Split Screen": {
+        "layout_intent": "Speaker-visible question-and-answer plate showing both question and answer together.",
+        "selection_cues": ["explicit question", "explicit answer", "Q&A structure"],
+        "avoid_when": "The transcript contains prompts without answers or ordinary explanatory points."
+      },
+      "Template No 18 OG": {
+        "layout_intent": "Full-screen Q&A reference plate.",
+        "avoid_when": "The Split Screen Q&A version has enough room."
+      },
+      "Template No 20 Split Screen": {
+        "layout_intent": "Exactly two parallel concepts with short descriptions or compact pointers.",
+        "selection_cues": ["exactly two categories", "two non-ordered concepts"],
+        "avoid_when": "The relationship is causal, sequential, before/after, or a true comparison requiring differentiation framing."
+      },
+      "Template No 20 OG": {
+        "layout_intent": "Full-screen two-concept plate when the two supported content blocks are too dense for Split Screen.",
+        "avoid_when": "The Split Screen version has enough room."
+      },
+      "Template No 21 Split Screen": {
+        "layout_intent": "Exactly three highly visual concepts using labels and icons with almost no supporting text.",
+        "selection_cues": ["exactly three concepts", "graphic plus label"],
+        "avoid_when": "Any concept requires substantial callouts or sub-pointers."
+      },
+      "Template No 21 OG": {
+        "layout_intent": "Three visual concepts with brief supported callouts or branches.",
+        "avoid_when": "The concepts need only labels/icons or the Split Screen version can hold them."
+      },
+      "Template No 22 Split Screen": {
+        "layout_intent": "Compact multi-category overview with short titles, descriptions, and mandatory icons/numbers.",
+        "selection_cues": ["5-7 categories", "brief descriptions"],
+        "avoid_when": "The categories require long explanations."
+      },
+      "Template No 22 OG": {
+        "layout_intent": "Full-screen multi-category overview with slightly more description space.",
+        "avoid_when": "The Split Screen version can hold the supported text."
+      },
+      "Template No 23 Split Screen": {
+        "layout_intent": "Minimal split-screen process/flow using short step text only.",
+        "avoid_when": "Steps require subheadings or descriptions."
+      },
+      "Template No 23 OG": {
+        "layout_intent": "Full-screen minimal process/flow with slightly longer step text.",
+        "avoid_when": "The Split Screen version can hold the flow."
+      },
+      "Template No 24 Glass BOX": {
+        "layout_intent": "Single low-density percentage/statistic glassbox without a plate heading.",
+        "selection_cues": ["explicit percentage", "survey result", "single quantitative fact"],
+        "avoid_when": "Multiple values need comparison or a graph."
+      },
+      "Template No 24 Split Screen": {
+        "layout_intent": "Speaker-visible statistic glassbox with optional compact heading/context.",
+        "avoid_when": "Multiple values need comparison or a graph."
+      },
+      "Template No 25 Glass Box": {
+        "layout_intent": "Logo/image recall plate with no explanatory text.",
+        "selection_cues": ["specific company", "brand", "product", "organization logo"],
+        "avoid_when": "No specific supported asset is identified or explanation text is necessary."
+      },
+      "Template No 26 Question Box": {
+        "layout_intent": "Short single learner-engagement question only.",
+        "avoid_when": "An answer, explanation, heading, or multiple questions must also appear."
+      },
+      "Template No 26 OG": {
+        "layout_intent": "Full-screen single reflection/discussion question with the larger permitted question limit.",
+        "avoid_when": "The shorter Question Box is sufficient."
+      },
+      "Template No 27": {
+        "layout_intent": "Definition plate pairing a concise supported definition with a specific illustration/vector area.",
+        "selection_cues": ["term means", "defined as", "new theory or framework definition"],
+        "avoid_when": "The content explains a process rather than defining a term."
+      },
+      "Template No 28": {
+        "layout_intent": "Memorable quote/principle plate with stylized quotation treatment.",
+        "selection_cues": ["attributed quote", "memorable saying", "standalone principle"],
+        "avoid_when": "The statement is an ordinary lecture sentence rather than a deliberate quotation or maxim."
+      },
+      "Type Template No 29": {
+        "layout_intent": "Headerless takeaway/conclusion plate emphasizing one brief supported sentence.",
+        "selection_cues": ["key takeaway", "conclusion", "brief learning point"],
+        "avoid_when": "Multiple points or a detailed definition must appear."
+      },
+      "Type Template No 30": {
+        "layout_intent": "Horizontal high-capacity framework boxes for dense supported detail.",
+        "avoid_when": "A simpler Type 1, Type 2, No 20, No 21, or No 22 layout can hold the content."
+      },
+      "Template No 31": {
+        "layout_intent": "Vertically stacked high-capacity boxes when each category needs substantial explanation.",
+        "avoid_when": "A simpler category layout can hold the content."
+      },
+      "Type Template No 32": {
+        "layout_intent": "Dense fact/background plate for researcher biography, historical context, or origin background.",
+        "avoid_when": "The content is a standard lecture list or a pure definition."
+      },
+      "Type Template No 33": {
+        "layout_intent": "Dense evidence plate for supported findings, citations, statistics, or data with subpoints.",
+        "avoid_when": "The source has no explicit evidence/data or a simpler fact plate is sufficient."
+      },
+      "Type Template No 35": {
+        "layout_intent": "Split-screen glassbox contrast for exactly two concepts that each need multiple supported sentences.",
+        "avoid_when": "A standard Differentiation or Template No 20 layout can hold the comparison."
+      },
+      "Type Template No 36": {
+        "layout_intent": "Absolute-last-resort heavy-text plate for an irreducible academic/policy explanation.",
+        "avoid_when": "The text can be summarized, listed, divided, or represented by any simpler template."
+      },
+      "Type Template No 40": {
+        "layout_intent": "Case-study/person/object image paired with a compact supported description and source tags.",
+        "selection_cues": ["specific case study", "historical person", "central object", "specific scenario"],
+        "avoid_when": "No specific supported image subject is present."
+      },
+      "Type Template No 41": {
+        "layout_intent": "Flat pointer list for characteristics, benefits, features, or standalone ideas.",
+        "avoid_when": "The content is hierarchical, sequential, comparative, or needs sub-pointers."
+      },
+      "Process Template 1": {
+        "layout_intent": "Low-density ordered steps with short labels and brief explanations.",
+        "avoid_when": "Stages require detailed reasoning or multiple nested points."
+      },
+      "Process Template 2": {
+        "layout_intent": "Moderately detailed procedure with a subheading and explanation per stage.",
+        "avoid_when": "The workflow is only labels or is deeply technical/multilevel."
+      },
+      "Process Template 3": {
+        "layout_intent": "High-density technical or multilevel workflow with structured details.",
+        "avoid_when": "A simpler process layout can preserve all supported meaning."
+      },
+      "Process Template 4": {
+        "layout_intent": "Modern split-screen process flow using step titles only, with icons or numbers.",
+        "avoid_when": "Any stage requires a description."
+      },
+      "Differentiation Template 1": {
+        "layout_intent": "Text-only side-by-side comparison of exactly two non-ordered sides.",
+        "avoid_when": "The relationship is sequential/causal or images are necessary."
+      },
+      "Differentiation Template 2": {
+        "layout_intent": "Image-supported comparison of exactly two brands, cases, or visual subjects.",
+        "avoid_when": "Specific supported images are unavailable or the relationship is sequential."
+      },
+      "Timeline Template 1": {
+        "layout_intent": "Low-density milestones using a time marker and very short event summary.",
+        "avoid_when": "Events require detailed supporting points or are not chronological."
+      },
+      "Timeline Template 2": {
+        "layout_intent": "Detailed chronological analysis with time markers, titles, and supported bullets.",
+        "avoid_when": "The source provides only brief milestones."
+      },
+      "Hierarchy Template 1": {
+        "layout_intent": "Node-based parent-child tree for taxonomy, organization, or architecture.",
+        "avoid_when": "The items are merely a flat list or ordered process."
+      },
+      "Graph Template 1": {
+        "layout_intent": "Line graph for explicit numeric change over a continuous progression.",
+        "avoid_when": "The transcript lacks numeric axes/values or compares discrete categories."
+      },
+      "Graph Template 2": {
+        "layout_intent": "Bar plot for explicit numeric comparison across discrete categories.",
+        "avoid_when": "The transcript lacks numeric values or describes continuous change."
+      },
+      "Graph Template 3": {
+        "layout_intent": "Pie chart for explicit parts of a whole that total 100 percent.",
+        "avoid_when": "Values do not represent a complete proportional distribution."
+      },
+      "Importance Template": {
+        "layout_intent": "Module/topic introduction or summary emphasizing concise learner benefits and outcomes.",
+        "selection_cues": ["why this matters", "this module will help", "key takeaways", "practical relevance"],
+        "avoid_when": "Detailed theory or full concept teaching is required."
+      },
+      "IMT Mind Map": {
+        "layout_intent": "Course/module navigation map with a central topic and connected topic branches.",
+        "selection_cues": ["module consists of", "we will cover", "key topics include"],
+        "avoid_when": "Teaching detailed content rather than mapping the learning structure."
+      },
+      "NMIMS Mind Map": {
+        "layout_intent": "NMIMS-specific module map combining topic structure, outcomes, and visible learner progress.",
+        "selection_cues": ["by the end of this module", "learning objectives", "module overview"],
+        "avoid_when": "The content is not for NMIMS or is detailed concept teaching."
+      },
+      "Soft Skills Template": {
+        "layout_intent": "Minimal headerless treatment for one short behavioral insight, takeaway, or key message.",
+        "selection_cues": ["effective leaders", "good communication", "trust develops", "short behavioral principle"],
+        "avoid_when": "A detailed framework, multiple points, or long explanation is required."
+      }
+    }
+  },
   "Face Only": {
     "category": "Default / Fallback",
     "density": "Low / Very Low",
@@ -427,7 +735,8 @@
     "constraints": {
       "text_length": "Max 3 lines per comparison point",
       "icons_images": "Not permitted",
-      "overflow": "> 4 differences leads to splitting into two plates (first 1-2 points slide out)"
+      "overflow": "> 4 differences leads to splitting into two plates (first 1-2 points slide out)",
+      "output_structure": "Use alternating paragraph details labelled LHS1, RHS1, LHS2, RHS2, and so on; labels are regular weight and values are bold"
     }
   },
   "Differentiation Template 2": {
@@ -437,7 +746,8 @@
     "constraints": {
       "side_headings": "Max 3 words each",
       "content": "Description and pointers below the image · max 2–3 lines",
-      "images": "Required (used for differences only)"
+      "images": "Required (used for differences only)",
+      "output_structure": "Use alternating paragraph details labelled LHS1, RHS1, LHS2, RHS2, and so on; labels are regular weight and values are bold"
     }
   },
   "Timeline Template 1": {

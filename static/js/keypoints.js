@@ -7,6 +7,7 @@ let isDirty = false;
 let duration = 0;
 let currentSessionIndex = 0;
 let deletedSentences = [];
+let deletedWords = [];
 let templateCatalog = {};
 
 // DOM Elements
@@ -55,14 +56,18 @@ function setupApiKeyValidation() {
                 });
                 const data = await resp.json();
                 if (data.has_key) {
-                    if (data.valid) {
+                    if (data.valid === true) {
                         statusEl.className = 'key-validation-status valid';
                         statusEl.innerHTML = '<i class="fa-solid fa-circle-check"></i> Server API key is verified and active.';
                         apiKeyInput.style.borderColor = 'var(--color-success)';
-                    } else {
+                    } else if (data.valid === false) {
                         statusEl.className = 'key-validation-status invalid';
                         statusEl.innerHTML = `<i class="fa-solid fa-circle-xmark"></i> Server API key validation failed: ${data.error || 'Invalid key'}`;
                         apiKeyInput.style.borderColor = 'var(--color-danger)';
+                    } else {
+                        statusEl.className = 'key-validation-status';
+                        statusEl.innerHTML = '<i class="fa-solid fa-triangle-exclamation"></i> Server key is configured but could not be verified yet.';
+                        apiKeyInput.style.borderColor = '';
                     }
                 } else {
                     statusEl.className = 'key-validation-status';
@@ -77,10 +82,11 @@ function setupApiKeyValidation() {
             return;
         }
 
-        // Validate format first
-        if (!key.startsWith('sk-or-')) {
+        // Avoid rejecting future OpenRouter key prefixes; only catch obvious
+        // paste mistakes here and let OpenRouter authenticate the key itself.
+        if (key.length < 20 || /\s/.test(key)) {
             statusEl.className = 'key-validation-status invalid';
-            statusEl.innerHTML = '<i class="fa-solid fa-circle-xmark"></i> Invalid format (should start with sk-or-)';
+            statusEl.innerHTML = '<i class="fa-solid fa-circle-xmark"></i> The key looks incomplete or contains spaces.';
             apiKeyInput.style.borderColor = 'var(--color-danger)';
             return;
         }
@@ -96,14 +102,18 @@ function setupApiKeyValidation() {
                 body: JSON.stringify({ api_key: key })
             });
             const data = await resp.json();
-            if (data.valid) {
+            if (data.valid === true) {
                 statusEl.className = 'key-validation-status valid';
                 statusEl.innerHTML = '<i class="fa-solid fa-circle-check"></i> API key is verified and active.';
                 apiKeyInput.style.borderColor = 'var(--color-success)';
-            } else {
+            } else if (data.valid === false) {
                 statusEl.className = 'key-validation-status invalid';
                 statusEl.innerHTML = `<i class="fa-solid fa-circle-xmark"></i> API key verification failed: ${data.error || 'Invalid key'}`;
                 apiKeyInput.style.borderColor = 'var(--color-danger)';
+            } else {
+                statusEl.className = 'key-validation-status';
+                statusEl.innerHTML = '<i class="fa-solid fa-triangle-exclamation"></i> Key saved, but OpenRouter could not verify it yet. It will still be used for generation.';
+                apiKeyInput.style.borderColor = '';
             }
         } catch (err) {
             statusEl.className = 'key-validation-status';
@@ -232,8 +242,7 @@ async function loadWorkspaceData() {
             sentData = await sentResp.json();
         }
         
-        sentences = sentData.sentences;
-        allSentences = [...sentData.sentences];
+        sentences = normalizeSentenceWords(sentData.sentences);
         duration = sentData.duration;
         
         // 2. Fetch sessions chunks from localStorage or server
@@ -244,11 +253,12 @@ async function loadWorkspaceData() {
         if (cachedChunks) {
             console.log("Loading chunks from localStorage...");
             const chunkObj = JSON.parse(cachedChunks);
-            const deletedObj = cachedDeleted ? JSON.parse(cachedDeleted) : { deleted_sentences: [] };
+            const deletedObj = cachedDeleted ? JSON.parse(cachedDeleted) : { deleted_sentences: [], deleted_words: [] };
             chunkData = {
                 exists: true,
                 sessions: chunkObj.sessions,
-                deleted_sentences: deletedObj.deleted_sentences || []
+                deleted_sentences: deletedObj.deleted_sentences || [],
+                deleted_words: deletedObj.deleted_words || []
             };
         } else {
             try {
@@ -266,7 +276,19 @@ async function loadWorkspaceData() {
         
         if (chunkData.exists && chunkData.sessions && chunkData.sessions.length > 0) {
             sessions = chunkData.sessions;
+            const emptySessionIndex = sessions.findIndex(session => !session.sentence_indices || session.sentence_indices.length === 0);
+            if (emptySessionIndex !== -1) {
+                alert(`Session ${emptySessionIndex + 1} is empty. Return to Smart Chunker and fix or delete it before generating pointers.`);
+                window.location.href = `/chunking?file=${encodeURIComponent(activeFile)}`;
+                return;
+            }
             deletedSentences = chunkData.deleted_sentences || [];
+            deletedWords = chunkData.deleted_words || [];
+            applyDeletedWords(sentences, deletedWords);
+            allSentences = sentences.map(sentence => ({
+                ...sentence,
+                words: (sentence.words || []).map(word => ({ ...word }))
+            }));
             
             // Filter out deleted sentences from active list
             const deletedIds = new Set(deletedSentences.map(d => d.id));
@@ -314,6 +336,9 @@ async function loadWorkspaceData() {
             // Normalize visuals items/details schema
             if (s.visuals && s.visuals.content) {
                 const content = s.visuals.content;
+                content.heading_timestamp = Number.isFinite(Number(content.heading_timestamp))
+                    ? Number(content.heading_timestamp)
+                    : Number(s.start || 0);
                 if (content.items) {
                     content.items = content.items.map(item => {
                         if (typeof item === 'string') {
@@ -769,6 +794,7 @@ function renderKeypointsList() {
 
     sessions.forEach((session, index) => {
         const isRepeat = !!session.is_repeat;
+        const headingTimestamp = Number(session.visuals?.content?.heading_timestamp ?? session.start ?? 0);
         const card = document.createElement('div');
         card.className = `session-card${isRepeat ? ' repeat-chunk' : ''}`;
         card.id = `keypoint-card-${index}`;
@@ -864,7 +890,15 @@ function renderKeypointsList() {
                         <div id="visual-content-editor-block-${index}">
                             <label class="session-input-label" style="font-size: 0.65rem;">Visual Content Detail</label>
                             <div style="display: flex; flex-direction: column; gap: 8px; margin-top: 4px;">
-                                <textarea class="refinement-input path-input template-title-input" id="template-title-input-${index}" placeholder="Slide/Visual Title..." style="font-size: 0.8rem; padding: 6px 10px; font-weight: 600; border-radius: 8px; width: 100%; rows: 1; resize: none; overflow: hidden; height: auto;">${escapeHtml(session.visuals?.content?.title || '')}</textarea>
+                                <div style="display: flex; gap: 8px; align-items: center;">
+                                    <label for="template-title-input-${index}" style="font-size: 0.8rem; font-weight: 400; color: var(--color-text-secondary); flex-shrink: 0;">Heading</label>
+                                    <textarea class="refinement-input path-input template-title-input" id="template-title-input-${index}" placeholder="Slide/Visual Title..." style="font-size: 0.8rem; padding: 6px 10px; font-weight: 600; border-radius: 8px; flex: 1; rows: 1; resize: none; overflow: hidden; height: auto;">${escapeHtml(session.visuals?.content?.title || '')}</textarea>
+                                    <div class="template-item-time-container" title="Heading timestamp (Min:Sec)">
+                                        <input type="number" min="0" id="template-heading-time-min-${index}" value="${Math.floor(headingTimestamp / 60)}" placeholder="Min" title="Heading minutes">
+                                        <span style="color: var(--color-text-muted); font-size: 0.8rem;">:</span>
+                                        <input type="number" min="0" max="59.9" step="0.1" id="template-heading-time-sec-${index}" value="${(headingTimestamp % 60).toFixed(1)}" placeholder="Sec" title="Heading seconds">
+                                    </div>
+                                </div>
                                 
                                 <div id="template-items-container-${index}" style="display: flex; flex-direction: column; gap: 6px;">
                                     <!-- Dynamic items or details -->
@@ -1030,6 +1064,27 @@ function renderKeypointsList() {
         });
         setTimeout(adjustTitleHeight, 0);
 
+        const headingMinInput = card.querySelector(`#template-heading-time-min-${index}`);
+        const headingSecInput = card.querySelector(`#template-heading-time-sec-${index}`);
+        const updateHeadingTimestamp = () => {
+            const mins = parseInt(headingMinInput.value) || 0;
+            const secs = parseFloat(headingSecInput.value) || 0;
+            session.visuals.content.heading_timestamp = clampTimestampToSession(session, mins * 60 + secs);
+            markDirty();
+        };
+        headingMinInput.addEventListener('input', updateHeadingTimestamp);
+        headingSecInput.addEventListener('input', updateHeadingTimestamp);
+        const finalizeHeadingTimestamp = () => {
+            updateHeadingTimestamp();
+            normalizeVisualTimestamps(session);
+            const value = session.visuals.content.heading_timestamp;
+            headingMinInput.value = Math.floor(value / 60);
+            headingSecInput.value = (value % 60).toFixed(1);
+            renderSessionVisualContent(session, index, card.querySelector(`#template-items-container-${index}`));
+        };
+        headingMinInput.addEventListener('change', finalizeHeadingTimestamp);
+        headingSecInput.addEventListener('change', finalizeHeadingTimestamp);
+
         // Hide visual content block if Face Only
         const contentBlock = card.querySelector(`#visual-content-editor-block-${index}`);
         if (session.visuals?.template_name === 'Face Only') {
@@ -1045,16 +1100,20 @@ function renderKeypointsList() {
 
         // Bind add template list item button
         card.querySelector('.btn-add-template-item').addEventListener('click', () => {
+            if (isDifferentiationTemplate(session)) {
+                alert('Differentiation plates use LHS/RHS paragraph rows. Use Add Detail instead.');
+                return;
+            }
             if (!session.visuals) {
                 session.visuals = { template_name: 'Face Only', why_chosen: '', graphics_required: false, content: { title: '', items: [], details: [] } };
             }
             if (!session.visuals.content) {
-                session.visuals.content = { title: '', items: [], details: [] };
+                session.visuals.content = { title: '', heading_timestamp: Number(session.start || 0), items: [], details: [] };
             }
             if (!session.visuals.content.items) {
                 session.visuals.content.items = [];
             }
-            session.visuals.content.items.push({ value: '', timestamp: 0.0 });
+            session.visuals.content.items.push({ value: '', timestamp: Number(session.visuals.content.heading_timestamp || session.start || 0) + 0.1 });
             markDirty();
             renderSessionVisualContent(session, index, itemsContainer);
         });
@@ -1065,12 +1124,20 @@ function renderKeypointsList() {
                 session.visuals = { template_name: 'Face Only', why_chosen: '', graphics_required: false, content: { title: '', items: [], details: [] } };
             }
             if (!session.visuals.content) {
-                session.visuals.content = { title: '', items: [], details: [] };
+                session.visuals.content = { title: '', heading_timestamp: Number(session.start || 0), items: [], details: [] };
             }
             if (!session.visuals.content.details) {
                 session.visuals.content.details = [];
             }
-            session.visuals.content.details.push({ label: '', value: '', timestamp: 0.0 });
+            const detailIndex = session.visuals.content.details.length;
+            const label = isDifferentiationTemplate(session)
+                ? `${detailIndex % 2 === 0 ? 'LHS' : 'RHS'}${Math.floor(detailIndex / 2) + 1}`
+                : '';
+            session.visuals.content.details.push({
+                label,
+                value: '',
+                timestamp: Number(session.visuals.content.heading_timestamp || session.start || 0) + 0.1
+            });
             markDirty();
             renderSessionVisualContent(session, index, itemsContainer);
         });
@@ -1139,6 +1206,48 @@ function renderSessionSubheadings(session, sessionIdx, container) {
     });
 }
 
+function clampTimestampToSession(session, timestamp) {
+    const start = Number(session.start || 0);
+    const end = Number(session.end || start);
+    const value = Number.isFinite(Number(timestamp)) ? Number(timestamp) : start;
+    return Math.max(start, Math.min(end, value));
+}
+
+function normalizeVisualTimestamps(session) {
+    if (!session.visuals) return;
+    const content = session.visuals.content || (session.visuals.content = { title: '', heading_timestamp: Number(session.start || 0), items: [], details: [] });
+    content.items = content.items || [];
+    content.details = content.details || [];
+    content.heading_timestamp = clampTimestampToSession(session, content.heading_timestamp ?? session.start ?? 0);
+
+    [...content.items, ...content.details].forEach(entry => {
+        entry.timestamp = clampTimestampToSession(session, entry.timestamp);
+    });
+    content.items.sort((a, b) => Number(a.timestamp || 0) - Number(b.timestamp || 0));
+    content.details.sort((a, b) => Number(a.timestamp || 0) - Number(b.timestamp || 0));
+
+    const entries = [...content.items, ...content.details]
+        .sort((a, b) => Number(a.timestamp || 0) - Number(b.timestamp || 0));
+    if (entries.length > 0 && Number(entries[0].timestamp) <= content.heading_timestamp) {
+        const end = Number(session.end || content.heading_timestamp);
+        if (content.heading_timestamp >= end) {
+            content.heading_timestamp = Math.max(Number(session.start || 0), end - 0.1);
+        }
+        const replacement = Math.min(end, content.heading_timestamp + 0.1);
+        entries.forEach(entry => {
+            if (Number(entry.timestamp) <= content.heading_timestamp) {
+                entry.timestamp = replacement;
+            }
+        });
+        content.items.sort((a, b) => Number(a.timestamp || 0) - Number(b.timestamp || 0));
+        content.details.sort((a, b) => Number(a.timestamp || 0) - Number(b.timestamp || 0));
+    }
+}
+
+function isDifferentiationTemplate(session) {
+    return String(session.visuals?.template_name || '').startsWith('Differentiation Template');
+}
+
 // Render dynamic visual layout items (list values or label-value fields)
 function renderSessionVisualContent(session, idx, container) {
     container.innerHTML = '';
@@ -1152,7 +1261,8 @@ function renderSessionVisualContent(session, idx, container) {
         };
     }
     
-    const content = session.visuals.content || { title: '', items: [], details: [] };
+    const content = session.visuals.content || { title: '', heading_timestamp: Number(session.start || 0), items: [], details: [] };
+    session.visuals.content = content;
     if (!content.items) content.items = [];
     if (!content.details) content.details = [];
     
@@ -1172,6 +1282,7 @@ function renderSessionVisualContent(session, idx, container) {
         const row = document.createElement('div');
         row.className = 'template-item-row';
         row.style.marginBottom = '6px';
+        row.style.order = String(Math.round(Number(itemObj.timestamp || 0) * 1000));
         row.innerHTML = `
             <span style="font-size: 0.7rem; color: var(--accent-primary);"><i class="fa-solid fa-square-minus"></i></span>
             <textarea class="template-item-value" placeholder="Item list value..." style="flex: 1; font-size: 0.8rem; background: rgba(255,255,255,0.02); border: 1px solid var(--border-color); padding: 5px 8px; border-radius: 6px; color: white; rows: 1; resize: none; overflow: hidden; height: auto;">${escapeHtml(itemObj.value || '')}</textarea>
@@ -1207,6 +1318,14 @@ function renderSessionVisualContent(session, idx, container) {
         };
         minInput.addEventListener('input', updateTime);
         secInput.addEventListener('input', updateTime);
+        minInput.addEventListener('change', () => {
+            normalizeVisualTimestamps(session);
+            renderSessionVisualContent(session, idx, container);
+        });
+        secInput.addEventListener('change', () => {
+            normalizeVisualTimestamps(session);
+            renderSessionVisualContent(session, idx, container);
+        });
         
         row.querySelector('.btn-delete-item').addEventListener('click', () => {
             content.items.splice(itemIdx, 1);
@@ -1218,17 +1337,20 @@ function renderSessionVisualContent(session, idx, container) {
     });
     
     // Render details
+    const differentiation = isDifferentiationTemplate(session);
     content.details.forEach((detail, detailIdx) => {
         if (detail.timestamp === undefined) {
             detail.timestamp = 0.0;
         }
         
         const row = document.createElement('div');
-        row.className = 'template-item-row';
+        row.className = `template-item-row${differentiation ? ' differentiation-paragraph-row' : ''}`;
         row.style.marginBottom = '6px';
+        row.style.order = String(Math.round(Number(detail.timestamp || 0) * 1000));
         row.innerHTML = `
-            <textarea class="template-item-label" placeholder="Label/Step/Year..." style="width: 120px; flex-shrink: 0; font-size: 0.8rem; background: rgba(255,255,255,0.03); border: 1px solid var(--border-color); padding: 5px 8px; border-radius: 6px; color: white; rows: 1; resize: none; overflow: hidden; height: auto;">${escapeHtml(detail.label || '')}</textarea>
-            <textarea class="template-item-value" placeholder="Description/Val..." style="flex: 1; font-size: 0.8rem; background: rgba(255,255,255,0.02); border: 1px solid var(--border-color); padding: 5px 8px; border-radius: 6px; color: white; rows: 1; resize: none; overflow: hidden; height: auto;">${escapeHtml(detail.value || '')}</textarea>
+            <textarea class="template-item-label" placeholder="${differentiation ? 'LHS1/RHS1' : 'Label/Step/Year...'}" style="width: ${differentiation ? '76px' : '120px'}; flex-shrink: 0; font-size: 0.8rem; font-weight: 400; background: rgba(255,255,255,0.03); border: 1px solid var(--border-color); padding: 5px 8px; border-radius: 6px; color: white; rows: 1; resize: none; overflow: hidden; height: auto;">${escapeHtml(detail.label || '')}</textarea>
+            ${differentiation ? '<span style="font-weight: 400; color: var(--color-text-secondary);">.</span>' : ''}
+            <textarea class="template-item-value" placeholder="${differentiation ? 'Comparison content...' : 'Description/Val...'}" style="flex: 1; font-size: 0.8rem; font-weight: ${differentiation ? '700' : '400'}; background: rgba(255,255,255,0.02); border: 1px solid var(--border-color); padding: 5px 8px; border-radius: 6px; color: white; rows: 1; resize: none; overflow: hidden; height: auto;">${escapeHtml(detail.value || '')}</textarea>
             <div class="template-item-time-container" title="Slide Entry Timestamp (Min:Sec)">
                 <input type="number" min="0" class="template-item-time-min" value="${Math.floor((detail.timestamp || 0.0) / 60)}" placeholder="Min" title="Minutes">
                 <span style="color: var(--color-text-muted); font-size: 0.8rem;">:</span>
@@ -1274,6 +1396,14 @@ function renderSessionVisualContent(session, idx, container) {
         };
         minInput.addEventListener('input', updateTime);
         secInput.addEventListener('input', updateTime);
+        minInput.addEventListener('change', () => {
+            normalizeVisualTimestamps(session);
+            renderSessionVisualContent(session, idx, container);
+        });
+        secInput.addEventListener('change', () => {
+            normalizeVisualTimestamps(session);
+            renderSessionVisualContent(session, idx, container);
+        });
         
         row.querySelector('.btn-delete-detail').addEventListener('click', () => {
             content.details.splice(detailIdx, 1);
@@ -1297,26 +1427,63 @@ function markDirty() {
 // Global Sequential Generation
 async function runAllKeypointsGeneration() {
     if (sessions.length === 0) return;
+
+    const missingSessionIndices = sessions
+        .map((session, index) => ({ session, index }))
+        .filter(({ session }) => {
+            const hasHeading = typeof session.heading === 'string' && session.heading.trim().length > 0;
+            const hasVisuals = session.visuals && session.visuals.template_name;
+            return !hasHeading || !hasVisuals;
+        })
+        .map(({ index }) => index);
+
+    const targetIndices = missingSessionIndices.length > 0
+        ? missingSessionIndices
+        : sessions.map((_, index) => index);
+    const isResume = missingSessionIndices.length > 0 && missingSessionIndices.length < sessions.length;
+    const confirmationText = isResume
+        ? `Resume pointer generation for the ${targetIndices.length} unfinished chunks? Completed chunks will be kept.`
+        : `Generate pointers for ${targetIndices.length} chunks sequentially? ${missingSessionIndices.length === 0 ? 'Existing pointers will be regenerated.' : ''}`;
     
-    if (!confirm('This will call the selected AI model to generate headings and subheadings for ALL chunks sequentially. Any existing highlights will be overwritten. Continue?')) {
+    if (!confirm(confirmationText)) {
         return;
     }
 
     btnRunAll.disabled = true;
-    
-    try {
-        for (let i = 0; i < sessions.length; i++) {
-            btnRunAll.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> Generating ${i + 1}/${sessions.length}...`;
-            await executeSessionGeneration(i);
+
+    let completedCount = 0;
+    const failedSessions = [];
+
+    for (let position = 0; position < targetIndices.length; position++) {
+        const sessionIndex = targetIndices[position];
+        btnRunAll.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> Generating ${position + 1}/${targetIndices.length}...`;
+
+        try {
+            await executeSessionGeneration(sessionIndex);
+            completedCount++;
+
+            // Checkpoint after every chunk so refreshes and later API failures do
+            // not throw away all earlier work.
+            localStorage.setItem('chunks_' + activeFile, JSON.stringify({ sessions: sessions }));
+            localStorage.setItem('deleted_' + activeFile, JSON.stringify({ deleted_sentences: deletedSentences, deleted_words: deletedWords }));
+        } catch (err) {
+            console.error(`Pointer generation failed for chunk ${sessionIndex + 1}:`, err);
+            failedSessions.push({ number: sessionIndex + 1, message: err.message });
         }
-        
-        alert('All headings and subheadings generated successfully!');
-    } catch (err) {
-        console.error(err);
-        alert('Global generation interrupted: ' + err.message);
-    } finally {
-        btnRunAll.disabled = false;
-        btnRunAll.innerHTML = '<i class="fa-solid fa-wand-magic-sparkles"></i> Generate All';
+
+        if (position < targetIndices.length - 1) {
+            await new Promise(resolve => setTimeout(resolve, 350));
+        }
+    }
+
+    btnRunAll.disabled = false;
+    btnRunAll.innerHTML = '<i class="fa-solid fa-wand-magic-sparkles"></i> Generate All';
+
+    if (failedSessions.length > 0) {
+        const failedNumbers = failedSessions.map(item => item.number).join(', ');
+        alert(`Generated ${completedCount} chunks and saved the progress. ${failedSessions.length} chunk(s) still need attention: ${failedNumbers}. Click Generate All again to retry only those chunks.`);
+    } else {
+        alert(`Pointers generated successfully for ${completedCount} chunks. Progress has been saved in this browser.`);
     }
 }
 
@@ -1370,8 +1537,13 @@ async function executeSessionGeneration(sessionIdx, feedback = '') {
     // Collect sentence details mapping to this session
     const sessionSentences = session.sentence_indices.map(id => {
         const s = sentences.find(sent => sent.id === id);
+        if (!s) return null;
         return { id: s.id, text: s.text, start: s.start, end: s.end, words: s.words || [] };
-    });
+    }).filter(Boolean);
+
+    if (sessionSentences.length === 0) {
+        throw new Error('This chunk no longer contains any transcript sentences. Return to Smart Chunker and rebuild it.');
+    }
 
     const keyOverride = apiKeyInput.value.trim();
     const model = modelSelect.value;
@@ -1433,6 +1605,9 @@ async function executeSessionGeneration(sessionIdx, feedback = '') {
         // Normalize visuals items/details schema
         if (session.visuals && session.visuals.content) {
             const content = session.visuals.content;
+            content.heading_timestamp = Number.isFinite(Number(content.heading_timestamp))
+                ? Number(content.heading_timestamp)
+                : Number(session.start || 0);
             if (content.items) {
                 content.items = content.items.map(item => {
                     if (typeof item === 'string') {
@@ -1464,6 +1639,7 @@ async function executeSessionGeneration(sessionIdx, feedback = '') {
                 content.details = [];
             }
         }
+        normalizeVisualTimestamps(session);
         
         // Update input field and re-render subheadings list
         const headingInput = cardEl.querySelector(`#heading-input-${sessionIdx}`);
@@ -1498,6 +1674,12 @@ async function executeSessionGeneration(sessionIdx, feedback = '') {
         const templateTitleInput = cardEl.querySelector(`#template-title-input-${sessionIdx}`);
         if (templateTitleInput) templateTitleInput.value = session.visuals.content?.title || '';
 
+        const generatedHeadingTimestamp = Number(session.visuals.content?.heading_timestamp ?? session.start ?? 0);
+        const headingMinInput = cardEl.querySelector(`#template-heading-time-min-${sessionIdx}`);
+        const headingSecInput = cardEl.querySelector(`#template-heading-time-sec-${sessionIdx}`);
+        if (headingMinInput) headingMinInput.value = Math.floor(generatedHeadingTimestamp / 60);
+        if (headingSecInput) headingSecInput.value = (generatedHeadingTimestamp % 60).toFixed(1);
+
         // Hide/show content blocks depending on template choice
         toggleSlideTextVisibility(sessionIdx, session.visuals.template_name);
 
@@ -1529,17 +1711,19 @@ async function executeSessionGeneration(sessionIdx, feedback = '') {
 // --------------------------------------------------------------------------
 async function saveKeypointsToServer() {
     if (!activeFile || sessions.length === 0) return;
+    sessions.forEach(normalizeVisualTimestamps);
     
     btnSaveKeypoints.disabled = true;
     btnSaveKeypoints.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Saving...';
     
     // Save to localStorage as a primary backup (crucial for stateless environments like Vercel)
     localStorage.setItem('chunks_' + activeFile, JSON.stringify({ sessions: sessions }));
-    localStorage.setItem('deleted_' + activeFile, JSON.stringify({ deleted_sentences: deletedSentences }));
+    localStorage.setItem('deleted_' + activeFile, JSON.stringify({ deleted_sentences: deletedSentences, deleted_words: deletedWords }));
     
     const payload = { 
         sessions: sessions,
-        deleted_sentences: deletedSentences
+        deleted_sentences: deletedSentences,
+        deleted_words: deletedWords
     };
     
     // Retrieve transcript from localStorage to enable server self-healing
@@ -1583,11 +1767,13 @@ function exportKeypointsJSON() {
     }
 
     recalculateSessionTimestamps();
+    sessions.forEach(normalizeVisualTimestamps);
 
     const exportData = {
         filename: activeFile,
         duration: duration,
         deleted_sentences: deletedSentences,
+        deleted_words: deletedWords,
         sessions: sessions.map((s, idx) => {
             return {
                 id: idx,
@@ -1624,16 +1810,25 @@ async function exportKeypointsDocx() {
     }
 
     btnExportDocx.disabled = true;
+    sessions.forEach(normalizeVisualTimestamps);
     const originalText = btnExportDocx.innerHTML;
     btnExportDocx.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Exporting...';
 
     const timeShiftInput = document.getElementById('docx-time-shift');
     const timeShiftValue = timeShiftInput ? timeShiftInput.value.trim() : '';
+    const validShift = /^[+-]?(?:\d+:\d{1,2}:\d{1,2}(?:\.\d+)?|\d+:\d{1,2}(?:\.\d+)?|\d+(?:\.\d+)?)$/;
+    if (timeShiftValue && !validShift.test(timeShiftValue)) {
+        alert('Invalid timestamp shift. Use HH:MM:SS.s, MM:SS.s, or seconds (for example +00:00:30.5).');
+        btnExportDocx.disabled = false;
+        btnExportDocx.innerHTML = originalText;
+        return;
+    }
 
     try {
         const payload = {
             time_increment: timeShiftValue,
             deleted_sentences: deletedSentences,
+            deleted_words: deletedWords,
             sessions: sessions.map((s, idx) => {
                 return {
                     id: idx,
@@ -1698,6 +1893,44 @@ async function exportKeypointsDocx() {
 // --------------------------------------------------------------------------
 // UTILITIES
 // --------------------------------------------------------------------------
+function makeWordId(sentenceId, word, index) {
+    return `${sentenceId}:${index}:${Number(word.start || 0).toFixed(3)}:${Number(word.end || 0).toFixed(3)}`;
+}
+
+function joinTranscriptWords(words) {
+    return (words || [])
+        .map(word => (word.word || '').trim())
+        .filter(Boolean)
+        .join(' ')
+        .replace(/\s+([,.;:!?%])/g, '$1')
+        .replace(/([([{])\s+/g, '$1')
+        .replace(/\s+(['’](?:s|t|re|ve|ll|d|m))\b/gi, '$1')
+        .trim();
+}
+
+function normalizeSentenceWords(sentenceList) {
+    return (sentenceList || []).map(sentence => ({
+        ...sentence,
+        words: (sentence.words || []).map((word, index) => ({
+            ...word,
+            word_id: word.word_id || makeWordId(sentence.id, word, index)
+        }))
+    }));
+}
+
+function applyDeletedWords(sentenceList, deletedWordList) {
+    const deletedIds = new Set((deletedWordList || []).map(word => word.word_id));
+    sentenceList.forEach(sentence => {
+        if (!sentence.words || sentence.words.length === 0) return;
+        sentence.words = sentence.words.filter(word => !deletedIds.has(word.word_id));
+        sentence.text = joinTranscriptWords(sentence.words);
+        if (sentence.words.length > 0) {
+            sentence.start = sentence.words[0].start;
+            sentence.end = sentence.words[sentence.words.length - 1].end;
+        }
+    });
+}
+
 function formatTime(seconds) {
     const mins = Math.floor(seconds / 60);
     const secs = Math.floor(seconds % 60);
@@ -1721,6 +1954,16 @@ function toggleSlideTextVisibility(index, templateName) {
     const contentBlock = document.getElementById(`visual-content-editor-block-${index}`);
     const astonBlock = document.getElementById(`name-aston-block-${index}`);
     const customBlock = document.getElementById(`custom-template-block-${index}`);
+    const card = document.getElementById(`keypoint-card-${index}`);
+    const addItemButton = card?.querySelector('.btn-add-template-item');
+    const addDetailButton = card?.querySelector('.btn-add-template-detail');
+    const differentiation = String(templateName || '').startsWith('Differentiation Template');
+    if (addItemButton) addItemButton.style.display = differentiation ? 'none' : '';
+    if (addDetailButton) {
+        addDetailButton.innerHTML = differentiation
+            ? '<i class="fa-solid fa-plus" style="font-size: 0.65rem; margin-right: 3px;"></i> Add LHS/RHS Row'
+            : '<i class="fa-solid fa-plus" style="font-size: 0.65rem; margin-right: 3px;"></i> Add Detail (Key-Value)';
+    }
     
     if (templateName === 'Face Only') {
         if (subBlock) subBlock.classList.add('hidden');

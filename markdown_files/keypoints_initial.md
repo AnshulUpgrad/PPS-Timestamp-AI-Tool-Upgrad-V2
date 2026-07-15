@@ -3,7 +3,7 @@ Your task is to analyze the transcription text of a session and convert it into 
 Specifically, you must:
 1. Generate exactly ONE main heading.
 2. Generate a list of optional competency-oriented subheadings (key highlights) summarizing the key concepts, competencies, or details taught.
-3. Generate additional explanatory paragraph or summary content if needed.
+3. Include additional text only when it is directly stated in the chunk; otherwise leave it blank.
 4. Select and construct the most appropriate visual layout template and its structured content for this session, using the Visual Template Selection Guide.
 
 Here is the clean transcription text of the session (for context):
@@ -33,6 +33,10 @@ GUIDELINES FOR HEADINGS, SUBHEADINGS & ADDITIONAL CONTENT:
 5. Element Timestamps: For every item in "items" or detail in "details" under the "visuals" content, you must assign a numeric "timestamp" corresponding to the exact second (as a float, e.g., 25.8) when the speaker begins discussing or explaining that specific item or detail. Use the word-level start timestamps provided in the timeline transcript to find the exact moment. The timestamp must fall within the range of this session chunk: [{session_start:.1f}s to {session_end:.1f}s].
 6. Downweight Heavy-Text Templates: Respect each catalog entry's `density` and `downweighted_status` constraints. Avoid any template marked as downweighted unless the transcript contains an exceptionally large volume of complex text that cannot be simplified. If you select one, explicitly justify in `why_chosen` why a simpler template was insufficient.
 7. Canonical Template IDs: The keys in the template catalog below are the exact allowed `template_name` values. Copy the selected key exactly; do not invent, shorten, or normalize a template name.
+8. Strict Chunk Grounding: Use only information explicitly present in this chunk. You may shorten or lightly clean the speaker's wording, but do not add explanations, examples, claims, context, definitions, relationships, or details to fill a template. Empty fields and simpler templates are preferable to invented content.
+9. Heading Timestamp: Set `visuals.content.heading_timestamp` to the exact word-level timestamp where the visual heading should first appear. Choose it from the transcript; there is no fixed delay rule.
+10. First Point Timing: The earliest item/detail timestamp must be later than `heading_timestamp`. Choose its actual spoken start time from the word-level transcript. Keep all subsequent entries in chronological order. Do not guess or round timestamps.
+11. Differentiation Paragraph Structure: For Differentiation Template 1 or 2, use `details` only and leave `items` empty. Output alternating paragraph rows labelled exactly `LHS1`, `RHS1`, `LHS2`, `RHS2`, and so on. Each label identifies the side and pair number; the corresponding `value` contains the supported content.
 
 VISUAL TEMPLATE SELECTION GUIDE & RULES:
 {visuals_guide_content}

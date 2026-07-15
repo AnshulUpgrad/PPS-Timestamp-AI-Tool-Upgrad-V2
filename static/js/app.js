@@ -7,6 +7,43 @@ let isCloudMode = false;
 let fileToUpload = null;
 let modalTranscribeUrl = '';
 
+const MEDIA_CACHE_DB = 'pps-local-media';
+const MEDIA_CACHE_STORE = 'files';
+
+function openMediaCache() {
+    return new Promise((resolve, reject) => {
+        const request = indexedDB.open(MEDIA_CACHE_DB, 1);
+        request.onupgradeneeded = () => {
+            const db = request.result;
+            if (!db.objectStoreNames.contains(MEDIA_CACHE_STORE)) {
+                db.createObjectStore(MEDIA_CACHE_STORE, { keyPath: 'name' });
+            }
+        };
+        request.onsuccess = () => resolve(request.result);
+        request.onerror = () => reject(request.error);
+    });
+}
+
+async function cacheMediaFile(filename, file) {
+    if (!filename || !file) return;
+    const db = await openMediaCache();
+    try {
+        await new Promise((resolve, reject) => {
+            const tx = db.transaction(MEDIA_CACHE_STORE, 'readwrite');
+            tx.objectStore(MEDIA_CACHE_STORE).put({
+                name: filename,
+                blob: file,
+                type: file.type || 'application/octet-stream',
+                updated_at: Date.now()
+            });
+            tx.oncomplete = resolve;
+            tx.onerror = () => reject(tx.error);
+        });
+    } finally {
+        db.close();
+    }
+}
+
 // DOM Elements - Selection Hero / Details
 const selectHeroContainer = document.getElementById('select-hero-container');
 const nativeBrowseFileBtn = document.getElementById('native-browse-file-btn');
@@ -271,6 +308,9 @@ function handleWebFileSelect(e) {
 
     writeLog(`Selected local file for upload: ${file.name} (${formatBytes(file.size)})`);
     fileToUpload = file;
+    cacheMediaFile(file.name, file).catch(err => {
+        console.warn('Could not cache local media for Smart Chunker playback:', err);
+    });
 
     selectedVideo = {
         name: file.name,
@@ -502,6 +542,9 @@ async function runNativeExtraction() {
         
         // Cache transcript locally
         localStorage.setItem('transcript_' + data.filename, JSON.stringify(transcribeData.transcript));
+        if (fileToUpload) {
+            await cacheMediaFile(data.filename, fileToUpload);
+        }
         // Add to local registry
         addToLocalRegistry(data.filename, selectedVideo.size);
         

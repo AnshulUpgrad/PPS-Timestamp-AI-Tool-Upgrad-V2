@@ -6,6 +6,7 @@ import subprocess
 import shutil
 import ctypes
 import string
+import re
 from flask import Flask, render_template, request, jsonify, send_from_directory
 from werkzeug.utils import secure_filename
 from dotenv import load_dotenv
@@ -76,13 +77,25 @@ def load_prompt_template(filename):
     with open(path, 'r', encoding='utf-8') as f:
         return f.read()
 
-def load_template_catalog():
-    """Load the canonical visual-template catalog used by both AI and UI flows."""
+def load_template_document():
+    """Load global visual guidance and the canonical template catalog."""
     with open(TEMPLATE_CATALOG_FILE, 'r', encoding='utf-8') as f:
-        catalog = json.load(f)
+        document = json.load(f)
 
-    if not isinstance(catalog, dict) or not catalog:
+    if not isinstance(document, dict) or not document:
         raise ValueError('templates.json must contain a non-empty JSON object.')
+
+    guidelines = document.get('__guidelines', {})
+    if guidelines and not isinstance(guidelines, dict):
+        raise ValueError("templates.json '__guidelines' must be a JSON object.")
+
+    catalog = {
+        template_id: template
+        for template_id, template in document.items()
+        if not template_id.startswith('__')
+    }
+    if not catalog:
+        raise ValueError('templates.json must contain at least one template.')
 
     for template_id, template in catalog.items():
         if not isinstance(template_id, str) or not template_id.strip():
@@ -93,7 +106,17 @@ def load_template_catalog():
             if required_field not in template:
                 raise ValueError(f"Template '{template_id}' is missing '{required_field}'.")
 
+    return guidelines, catalog
+
+def load_template_catalog():
+    """Load only selectable templates for the AI enum and UI dropdown."""
+    _, catalog = load_template_document()
     return catalog
+
+def load_template_guidelines():
+    """Load reinforced global and template-specific selection guidance."""
+    guidelines, _ = load_template_document()
+    return guidelines
 
 def normalize_model_name(model_name):
     model_name = (model_name or DEFAULT_AI_MODEL).strip()
@@ -155,10 +178,18 @@ def call_openrouter_api(model_name, prompt, response_schema=None, api_key=None):
             }
         }
         
-    req = urllib.request.Request(url, data=json.dumps(body).encode('utf-8'), headers=headers, method='POST')
-    try:
+    def send_request(request_body):
+        req = urllib.request.Request(
+            url,
+            data=json.dumps(request_body).encode('utf-8'),
+            headers=headers,
+            method='POST'
+        )
         with urllib.request.urlopen(req, timeout=180) as response:
-            response_data = json.loads(response.read().decode('utf-8'))
+            return json.loads(response.read().decode('utf-8'))
+
+    try:
+        response_data = send_request(body)
             
         choices = response_data.get('choices', [])
         if not choices:
@@ -176,6 +207,35 @@ def call_openrouter_api(model_name, prompt, response_schema=None, api_key=None):
             error_msg = error_json.get('error', {}).get('message', str(e))
         except Exception:
             error_msg = error_body or str(e)
+
+        # Some OpenRouter providers do not implement strict JSON Schema even
+        # though they can still return valid JSON. Fall back to prompt-enforced
+        # JSON instead of aborting the user's entire workflow.
+        schema_error = any(
+            marker in error_msg.lower()
+            for marker in ('response_format', 'json_schema', 'structured output', 'schema')
+        )
+        if response_schema and e.code in (400, 422) and schema_error:
+            fallback_body = dict(body)
+            fallback_body.pop('response_format', None)
+            fallback_body['messages'] = [{
+                'role': 'user',
+                'content': prompt + '\n\nReturn only a valid JSON object matching the requested structure. Do not use Markdown fences.'
+            }]
+            try:
+                response_data = send_request(fallback_body)
+                choices = response_data.get('choices', [])
+                text_response = choices[0].get('message', {}).get('content', '') if choices else ''
+                if text_response:
+                    return text_response
+                raise OpenRouterError('OpenRouter returned an empty response during JSON fallback.', 500)
+            except OpenRouterError:
+                raise
+            except Exception as fallback_error:
+                raise OpenRouterError(
+                    f'OpenRouter structured-output fallback failed: {str(fallback_error)}',
+                    500
+                )
         raise OpenRouterError(f"OpenRouter HTTP Error ({e.code}): {error_msg}", e.code)
     except Exception as e:
         raise OpenRouterError(f"OpenRouter API call failed: {str(e)}", 500)
@@ -236,6 +296,7 @@ class VisualsDetail(BaseModel):
 
 class VisualsContent(BaseModel):
     title: str
+    heading_timestamp: float = 0.0
     items: Optional[List[VisualsItem]] = []
     details: Optional[List[VisualsDetail]] = []
 
@@ -258,7 +319,6 @@ class SessionChunk(BaseModel):
 
 class ChunkingResult(BaseModel):
     sessions: List[SessionChunk]
-
 
 def load_config():
     if os.path.exists(CONFIG_FILE):
@@ -419,10 +479,11 @@ def get_app_config():
 @app.route('/api/templates', methods=['GET'])
 def get_template_catalog():
     try:
-        catalog = load_template_catalog()
+        guidelines, catalog = load_template_document()
         return jsonify({
             'templates': catalog,
             'template_ids': list(catalog.keys()),
+            'guidelines': guidelines,
             'default_ai_model': DEFAULT_AI_MODEL
         }), 200
     except Exception as e:
@@ -887,6 +948,100 @@ def chunking_view():
 def keypoints_view():
     return render_template('keypoints.html')
 
+def _clamp_timestamp(value, session_start, session_end):
+    try:
+        numeric = float(value)
+    except (TypeError, ValueError):
+        numeric = session_start
+    return max(session_start, min(session_end, numeric))
+
+def _snap_to_word_start(value, word_starts, session_start, session_end):
+    clamped = _clamp_timestamp(value, session_start, session_end)
+    if not word_starts:
+        return round(clamped, 3)
+    return round(min(word_starts, key=lambda start: abs(start - clamped)), 3)
+
+def normalize_generated_visuals(visuals, sentences, session_start, session_end):
+    """Keep generated visual timestamps valid, grounded to words, and ordered."""
+    word_starts = sorted({
+        float(word.get('start', session_start))
+        for sentence in sentences
+        for word in sentence.get('words', [])
+        if session_start <= float(word.get('start', session_start)) <= session_end
+    })
+    content = visuals.setdefault('content', {})
+    heading_time = _snap_to_word_start(
+        content.get('heading_timestamp', session_start),
+        word_starts,
+        session_start,
+        session_end
+    )
+    content['heading_timestamp'] = heading_time
+
+    items = content.get('items') or []
+    details = content.get('details') or []
+    for entry in items + details:
+        entry['timestamp'] = _snap_to_word_start(
+            entry.get('timestamp', heading_time),
+            word_starts,
+            session_start,
+            session_end
+        )
+
+    items.sort(key=lambda entry: entry.get('timestamp', session_start))
+    details.sort(key=lambda entry: entry.get('timestamp', session_start))
+
+    all_entries = sorted(items + details, key=lambda entry: entry.get('timestamp', session_start))
+    if all_entries and heading_time >= session_end:
+        earlier_word_starts = [start for start in word_starts if start < session_end]
+        heading_time = earlier_word_starts[-1] if earlier_word_starts else max(session_start, session_end - 0.1)
+        content['heading_timestamp'] = round(heading_time, 3)
+    if all_entries and all_entries[0].get('timestamp', heading_time) <= heading_time:
+        later_word_starts = [start for start in word_starts if start > heading_time]
+        replacement = later_word_starts[0] if later_word_starts else min(session_end, heading_time + 0.1)
+        for entry in all_entries:
+            if entry.get('timestamp', heading_time) <= heading_time:
+                entry['timestamp'] = round(replacement, 3)
+        items.sort(key=lambda entry: entry.get('timestamp', session_start))
+        details.sort(key=lambda entry: entry.get('timestamp', session_start))
+
+    if str(visuals.get('template_name', '')).startswith('Differentiation Template'):
+        # Comparisons remain easy-to-edit paragraph rows: LHS1, RHS1, LHS2, RHS2...
+        for index, detail in enumerate(details):
+            pair_number = index // 2 + 1
+            detail['label'] = f"{'LHS' if index % 2 == 0 else 'RHS'}{pair_number}"
+
+    content['items'] = items
+    content['details'] = details
+    return visuals
+
+def validate_visual_grounding(session_text, visuals, text_content=''):
+    """Reject visual copy that substantially introduces vocabulary absent from the chunk."""
+    stop_words = {
+        'a', 'an', 'and', 'are', 'as', 'at', 'be', 'by', 'for', 'from', 'in',
+        'is', 'it', 'of', 'on', 'or', 'that', 'the', 'this', 'to', 'was', 'with'
+    }
+    source_tokens = {
+        token for token in re.findall(r"[a-z0-9']+", session_text.lower())
+        if token not in stop_words
+    }
+    content = visuals.get('content', {})
+    generated_values = [content.get('title', ''), text_content]
+    generated_values.extend(item.get('value', '') for item in content.get('items', []))
+    generated_values.extend(detail.get('value', '') for detail in content.get('details', []))
+    for value in generated_values:
+        tokens = [
+            token for token in re.findall(r"[a-z0-9']+", str(value).lower())
+            if token not in stop_words
+        ]
+        if len(tokens) < 3:
+            continue
+        unsupported = [token for token in tokens if token not in source_tokens]
+        if len(unsupported) / len(tokens) > 0.34:
+            raise ValueError(
+                f"Visual text is not sufficiently grounded in the chunk; unsupported terms: {', '.join(unsupported[:8])}"
+            )
+
 @app.route('/api/generate-session-keypoints', methods=['POST'])
 def generate_session_keypoints():
     data = request.json or {}
@@ -933,8 +1088,11 @@ def generate_session_keypoints():
     
     # templates.json is the canonical template-selection guide.
     try:
-        template_catalog = load_template_catalog()
-        visuals_guide_content = json.dumps(template_catalog, ensure_ascii=False, indent=2)
+        template_guidelines, template_catalog = load_template_document()
+        visuals_guide_content = json.dumps({
+            'global_and_reinforced_guidelines': template_guidelines,
+            'templates': template_catalog
+        }, ensure_ascii=False, indent=2)
     except Exception as e:
         return jsonify({'error': f'Failed to load templates.json: {str(e)}'}), 500
         
@@ -992,6 +1150,11 @@ def generate_session_keypoints():
                         "type": "object",
                         "properties": {
                             "title": {"type": "string"},
+                            "heading_timestamp": {
+                                "type": "number",
+                                "minimum": session_start,
+                                "maximum": session_end
+                            },
                             "items": {
                                 "type": "array",
                                 "items": {
@@ -1011,15 +1174,14 @@ def generate_session_keypoints():
                                     "properties": {
                                         "label": {"type": "string"},
                                         "value": {"type": "string"},
-                                        "timestamp": {"type": "number"},
-                                        "extra": {"type": "string"}
+                                        "timestamp": {"type": "number"}
                                     },
                                     "required": ["label", "value", "timestamp"],
                                     "additionalProperties": False
                                 }
                             }
                         },
-                        "required": ["title"],
+                        "required": ["title", "heading_timestamp", "items", "details"],
                         "additionalProperties": False
                     }
                 },
@@ -1036,9 +1198,15 @@ def generate_session_keypoints():
     
     for attempt in range(max_retries):
         try:
+            attempt_prompt = prompt
+            if last_error is not None:
+                attempt_prompt += (
+                    "\n\nYour previous response failed validation: "
+                    f"{last_error}. Correct that issue. Use only transcript-supported wording and timestamps."
+                )
             text_response = call_openrouter_api(
                 model_name=model_name,
-                prompt=prompt,
+                prompt=attempt_prompt,
                 response_schema=schema,
                 api_key=api_key
             )
@@ -1052,13 +1220,25 @@ def generate_session_keypoints():
             subheadings = validated_data.subheadings
             text_content = validated_data.text_content
             visuals = validated_data.visuals.model_dump()
-            
+            visuals = normalize_generated_visuals(
+                visuals,
+                sentences,
+                session_start,
+                session_end
+            )
             template_name = visuals.get('template_name', 'Face Only').strip()
             if template_name == 'Face Only':
                 subheadings = []
                 text_content = ''
                 visuals['graphics_required'] = False
-                visuals['content'] = {'title': '', 'items': [], 'details': []}
+                visuals['content'] = {
+                    'title': '',
+                    'heading_timestamp': session_start,
+                    'items': [],
+                    'details': []
+                }
+            else:
+                validate_visual_grounding(session_text, visuals, text_content)
                 
             return jsonify({
                 'heading': heading,
@@ -1204,7 +1384,7 @@ def validate_key():
     import urllib.error
     import json
     
-    url = "https://openrouter.ai/api/v1/auth/key"
+    url = "https://openrouter.ai/api/v1/key"
     headers = {
         'Authorization': f'Bearer {api_key}',
         'HTTP-Referer': 'https://github.com/AnshulUpgrad/PPS-Timestamp-AI-Tool-Upgrad-V2',
@@ -1215,26 +1395,50 @@ def validate_key():
     try:
         with urllib.request.urlopen(req, timeout=10) as response:
             res_data = json.loads(response.read().decode('utf-8'))
-            is_valid = res_data.get('data', {}).get('is_active', True)
+            key_data = res_data.get('data', {})
+
+            # Management keys are valid OpenRouter credentials but cannot call
+            # completion endpoints, so reject them with a useful explanation.
+            if key_data.get('is_management_key') or key_data.get('is_provisioning_key'):
+                return jsonify({
+                    'valid': False,
+                    'has_key': True,
+                    'is_override': is_override,
+                    'error': 'This is a management/provisioning key. Use a standard OpenRouter API key for AI generation.',
+                    'data': key_data
+                }), 200
+
             return jsonify({
-                'valid': is_valid,
+                'valid': True,
                 'has_key': True,
                 'is_override': is_override,
-                'data': res_data.get('data', {})
+                'data': key_data
             }), 200
     except urllib.error.HTTPError as e:
+        try:
+            error_body = json.loads(e.read().decode('utf-8'))
+            error_message = error_body.get('error', {}).get('message') or error_body.get('message')
+        except Exception:
+            error_message = None
+
+        # Only an authentication response proves the key is invalid. Other
+        # statuses can be temporary OpenRouter/rate-limit failures.
+        is_auth_failure = e.code == 401
         return jsonify({
-            'valid': False,
+            'valid': False if is_auth_failure else None,
             'has_key': True,
             'is_override': is_override,
-            'error': f'HTTP Error {e.code}'
+            'error': error_message or (
+                'OpenRouter rejected this API key.' if is_auth_failure
+                else f'OpenRouter verification is temporarily unavailable (HTTP {e.code}).'
+            )
         }), 200
     except Exception as e:
         return jsonify({
-            'valid': False,
+            'valid': None,
             'has_key': True,
             'is_override': is_override,
-            'error': str(e)
+            'error': f'Could not reach OpenRouter to verify the key: {str(e)}'
         }), 200
 
 @app.route('/api/chunk-sessions', methods=['POST'])
@@ -1389,11 +1593,13 @@ def get_chunks(filename):
     deleted_path = os.path.join(app.config['TRANSCRIPTIONS_FOLDER'], deleted_filename)
     
     deleted_sentences = []
+    deleted_words = []
     if os.path.exists(deleted_path) and os.path.isfile(deleted_path):
         try:
             with open(deleted_path, 'r', encoding='utf-8') as f:
                 del_data = json.load(f)
                 deleted_sentences = del_data.get('deleted_sentences', [])
+                deleted_words = del_data.get('deleted_words', [])
         except Exception as e:
             print(f"Failed to load deleted sentences: {e}")
     
@@ -1404,10 +1610,13 @@ def get_chunks(filename):
             # Fallback to deleted_sentences inside chunks JSON if separate file doesn't exist
             if not deleted_sentences:
                 deleted_sentences = data.get('deleted_sentences', [])
+            if not deleted_words:
+                deleted_words = data.get('deleted_words', [])
             return jsonify({
                 'exists': True,
                 'sessions': data.get('sessions', []),
                 'deleted_sentences': deleted_sentences,
+                'deleted_words': deleted_words,
                 'updated_at': data.get('updated_at', '')
             }), 200
         except Exception as e:
@@ -1423,6 +1632,17 @@ def save_chunks(filename):
     data = request.json or {}
     sessions = data.get('sessions', [])
     deleted_sentences = data.get('deleted_sentences', [])
+    deleted_words = data.get('deleted_words', [])
+
+    if data.get('confirm'):
+        empty_sessions = [
+            index + 1 for index, session in enumerate(sessions)
+            if not session.get('sentence_indices')
+        ]
+        if empty_sessions:
+            return jsonify({
+                'error': f"Cannot confirm empty session(s): {', '.join(map(str, empty_sessions))}."
+            }), 400
     
     chunks_filename = f"{filename}_chunks.json"
     chunks_path = os.path.join(app.config['TRANSCRIPTIONS_FOLDER'], chunks_filename)
@@ -1443,6 +1663,8 @@ def save_chunks(filename):
         save_data = {
             'filename': filename,
             'sessions': sessions,
+            'deleted_sentences': deleted_sentences,
+            'deleted_words': deleted_words,
             'updated_at': datetime.datetime.now().isoformat()
         }
         with open(chunks_path, 'w', encoding='utf-8') as f:
@@ -1452,13 +1674,14 @@ def save_chunks(filename):
         deleted_data = {
             'filename': filename,
             'deleted_sentences': deleted_sentences,
+            'deleted_words': deleted_words,
             'updated_at': datetime.datetime.now().isoformat()
         }
         with open(deleted_path, 'w', encoding='utf-8') as f:
             json.dump(deleted_data, f, ensure_ascii=False, indent=2)
             
         return jsonify({
-            'message': 'Chunks and deleted sentences saved successfully',
+            'message': 'Chunks and transcript deletions saved successfully',
             'filename': chunks_filename
         }), 200
     except Exception as e:
@@ -1514,6 +1737,7 @@ def export_docx(filename):
     
     # Pull deleted sentences directly from the separate JSON file on disk
     deleted_sentences = []
+    deleted_words = []
     deleted_filename = f"{filename}_deleted_sentences.json"
     deleted_path = os.path.join(app.config['TRANSCRIPTIONS_FOLDER'], deleted_filename)
     if os.path.exists(deleted_path) and os.path.isfile(deleted_path):
@@ -1521,12 +1745,15 @@ def export_docx(filename):
             with open(deleted_path, 'r', encoding='utf-8') as f:
                 del_data = json.load(f)
                 deleted_sentences = del_data.get('deleted_sentences', [])
+                deleted_words = del_data.get('deleted_words', [])
         except Exception as e:
             print(f"Error loading deleted sentences from disk during DOCX export: {e}")
             
     # Fallback to payload if file was not found or failed to load
     if not deleted_sentences:
         deleted_sentences = data.get('deleted_sentences', [])
+    if not deleted_words:
+        deleted_words = data.get('deleted_words', [])
     
     if not sessions_data:
         return jsonify({'error': 'No session data provided for export.'}), 400
@@ -1550,6 +1777,31 @@ def export_docx(filename):
         except Exception as e:
             print(f"Error parsing transcript for DOCX: {e}")
 
+    # Apply word-level deletions to the reconstructed transcript before export.
+    for deleted_word in deleted_words:
+        sentence = sentences_map.get(deleted_word.get('sentence_id'))
+        if not sentence or not sentence.get('words'):
+            continue
+        target_start = float(deleted_word.get('start', -1.0))
+        target_end = float(deleted_word.get('end', -1.0))
+        target_text = str(deleted_word.get('word', '')).strip()
+        removed = False
+        kept_words = []
+        for word in sentence.get('words', []):
+            same_time = (
+                abs(float(word.get('start', -2.0)) - target_start) < 0.002
+                and abs(float(word.get('end', -2.0)) - target_end) < 0.002
+            )
+            same_text = str(word.get('word', '')).strip() == target_text
+            if not removed and same_time and same_text:
+                removed = True
+                continue
+            kept_words.append(word)
+        sentence['words'] = kept_words
+        text = " ".join(str(word.get('word', '')).strip() for word in kept_words if str(word.get('word', '')).strip())
+        text = re.sub(r'\s+([,.;:!?%])', r'\1', text).strip()
+        sentence['text'] = text
+
     # Parse time increment if provided and shift timestamps
     time_increment = data.get('time_increment', '')
     time_shift = parse_time_increment(time_increment)
@@ -1562,6 +1814,13 @@ def export_docx(filename):
                     ds['start'] = ds.get('start', 0.0) + time_shift
                 if 'end' in ds:
                     ds['end'] = ds.get('end', 0.0) + time_shift
+
+        if deleted_words:
+            for word in deleted_words:
+                if 'start' in word:
+                    word['start'] = word.get('start', 0.0) + time_shift
+                if 'end' in word:
+                    word['end'] = word.get('end', 0.0) + time_shift
 
         # 2. Shift sentences_map
         if sentences_map:
@@ -1583,6 +1842,8 @@ def export_docx(filename):
                 if visuals:
                     v_content = visuals.get('content', {})
                     if v_content:
+                        if 'heading_timestamp' in v_content:
+                            v_content['heading_timestamp'] = v_content.get('heading_timestamp', 0.0) + time_shift
                         v_items = v_content.get('items', [])
                         for item in v_items:
                             if 'timestamp' in item:
@@ -1623,15 +1884,16 @@ def export_docx(filename):
 
     def format_seconds(seconds):
         is_neg = seconds < 0
-        seconds = abs(seconds)
-        hours = int(seconds // 3600)
-        mins = int((seconds % 3600) // 60)
-        secs = int(seconds % 60)
+        total_tenths = int(round(abs(float(seconds)) * 10))
+        hours, remainder = divmod(total_tenths, 36000)
+        mins, second_tenths = divmod(remainder, 600)
+        whole_seconds, tenths = divmod(second_tenths, 10)
+        seconds_text = f"{whole_seconds:02d}" if tenths == 0 else f"{whole_seconds:02d}.{tenths}"
         prefix = "-" if is_neg else ""
         if hours > 0:
-            return f"{prefix}{hours:02d}:{mins:02d}:{secs:02d}"
+            return f"{prefix}{hours:02d}:{mins:02d}:{seconds_text}"
         else:
-            return f"{prefix}{mins}:{secs:02d}"
+            return f"{prefix}{mins}:{seconds_text}"
 
     # Create document
     doc = Document()
@@ -1783,18 +2045,9 @@ def export_docx(filename):
         v_title = v_content.get('title', '')
         v_items = v_content.get('items', [])
         v_details = v_content.get('details', [])
-        
-        # Get first subheading timestamp (defaulting to session_start if none)
-        first_sub_ts = None
-        if v_items:
-            first_sub_ts = v_items[0].get('timestamp')
-        if first_sub_ts is None and v_details:
-            first_sub_ts = v_details[0].get('timestamp')
-            
-        if first_sub_ts is None:
-            first_sub_ts = session_start
-            
-        first_sub_ts_str = format_seconds(first_sub_ts)
+        heading_timestamp = v_content.get('heading_timestamp', session_start)
+        heading_timestamp = max(session_start, min(session_end, float(heading_timestamp)))
+        heading_timestamp_str = format_seconds(heading_timestamp)
 
         # Check for deleted sentences falling within this session's original range
         session_deleted = []
@@ -1804,6 +2057,13 @@ def export_docx(filename):
             ds_end = ds.get('end', 0.0)
             if orig_start - 0.15 <= ds_start <= orig_end + 0.15:
                 session_deleted.append(f"{format_seconds(ds_start)} - {format_seconds(ds_end)}")
+        for word in deleted_words:
+            word_start = word.get('start', 0.0)
+            word_end = word.get('end', 0.0)
+            if orig_start - 0.15 <= word_start <= orig_end + 0.15:
+                session_deleted.append(
+                    f"{format_seconds(word_start)} - {format_seconds(word_end)} ({word.get('word', '').strip()})"
+                )
 
         # Left Cell Content
         cell_left = row_cells[0]
@@ -1816,7 +2076,7 @@ def export_docx(filename):
         run_s_title.font.color.rgb = RGBColor(30, 41, 59) # Slate 800
         
         # Plain text timestamp beside heading
-        run_s_ts = p_session.add_run(f" {first_sub_ts_str}")
+        run_s_ts = p_session.add_run(f" {heading_timestamp_str}")
         run_s_ts.font.name = 'Calibri'
         run_s_ts.font.size = Pt(11)
         run_s_ts.font.bold = False
@@ -1935,7 +2195,7 @@ def export_docx(filename):
                 run_v_title_lbl = p_v_title.add_run("  Heading: ")
                 run_v_title_lbl.font.name = 'Calibri'
                 run_v_title_lbl.font.size = Pt(9)
-                run_v_title_lbl.font.bold = True
+                run_v_title_lbl.font.bold = False
                 run_v_title_lbl.font.color.rgb = RGBColor(0, 0, 0)
                 
                 run_v_title_val = p_v_title.add_run(v_title)
@@ -1944,58 +2204,49 @@ def export_docx(filename):
                 run_v_title_val.font.bold = True
                 run_v_title_val.font.color.rgb = RGBColor(0, 0, 0)
                 
-                run_v_title_ts = p_v_title.add_run(f" {first_sub_ts_str}")
+                run_v_title_ts = p_v_title.add_run(f" {heading_timestamp_str}")
                 run_v_title_ts.font.name = 'Calibri'
                 run_v_title_ts.font.size = Pt(9.5)
                 run_v_title_ts.font.bold = False
                 run_v_title_ts.font.color.rgb = RGBColor(0, 0, 0)
                 
-            if v_items:
-                for item in v_items:
-                    p_v_item = cell_right.add_paragraph(style='List Bullet 2')
-                    p_v_item.paragraph_format.space_after = Pt(2)
-                    
-                    item_val = item.get('value', '')
-                    item_ts = item.get('timestamp', 0.0)
-                    
-                    run_ts = p_v_item.add_run(f"[{format_seconds(item_ts)}] ")
-                    run_ts.font.name = 'Calibri'
-                    run_ts.font.size = Pt(8.5)
-                    run_ts.font.bold = False
-                    run_ts.font.color.rgb = RGBColor(0, 0, 0)
-                    
-                    run_val = p_v_item.add_run(item_val)
-                    run_val.font.name = 'Calibri'
-                    run_val.font.size = Pt(9)
-                    run_val.font.bold = True
-                    run_val.font.color.rgb = RGBColor(0, 0, 0)
-                    
-            if v_details:
-                for detail in v_details:
-                    p_v_detail = cell_right.add_paragraph(style='List Bullet 2')
-                    p_v_detail.paragraph_format.space_after = Pt(2)
-                    
-                    d_label = detail.get('label', '')
-                    d_val = detail.get('value', '')
-                    d_ts = detail.get('timestamp', 0.0)
-                    
-                    run_ts = p_v_detail.add_run(f"[{format_seconds(d_ts)}] ")
-                    run_ts.font.name = 'Calibri'
-                    run_ts.font.size = Pt(8.5)
-                    run_ts.font.bold = False
-                    run_ts.font.color.rgb = RGBColor(0, 0, 0)
-                    
-                    run_lbl = p_v_detail.add_run(f"{d_label}: ")
+            # Render all pointer rows chronologically, even when a template uses
+            # both list items and labelled details.
+            visual_entries = [
+                ('item', item) for item in v_items
+            ] + [
+                ('detail', detail) for detail in v_details
+            ]
+            visual_entries.sort(key=lambda entry: float(entry[1].get('timestamp', session_start)))
+            is_differentiation = template_name.startswith('Differentiation Template')
+
+            for entry_type, entry in visual_entries:
+                paragraph_style = None if is_differentiation else 'List Bullet 2'
+                p_entry = cell_right.add_paragraph(style=paragraph_style)
+                p_entry.paragraph_format.space_after = Pt(2)
+                entry_timestamp = entry.get('timestamp', session_start)
+
+                run_ts = p_entry.add_run(f"[{format_seconds(entry_timestamp)}] ")
+                run_ts.font.name = 'Calibri'
+                run_ts.font.size = Pt(8.5)
+                run_ts.font.bold = False
+                run_ts.font.color.rgb = RGBColor(0, 0, 0)
+
+                if entry_type == 'detail':
+                    run_lbl = p_entry.add_run(f"{entry.get('label', '')}. " if is_differentiation else f"{entry.get('label', '')}: ")
                     run_lbl.font.name = 'Calibri'
                     run_lbl.font.size = Pt(9)
-                    run_lbl.font.bold = True
+                    run_lbl.font.bold = False if is_differentiation else True
                     run_lbl.font.color.rgb = RGBColor(0, 0, 0)
-                    
-                    run_val = p_v_detail.add_run(d_val)
-                    run_val.font.name = 'Calibri'
-                    run_val.font.size = Pt(9)
-                    run_val.font.bold = True
-                    run_val.font.color.rgb = RGBColor(0, 0, 0)
+                    entry_value = entry.get('value', '')
+                else:
+                    entry_value = entry.get('value', '')
+
+                run_val = p_entry.add_run(entry_value)
+                run_val.font.name = 'Calibri'
+                run_val.font.size = Pt(9)
+                run_val.font.bold = True
+                run_val.font.color.rgb = RGBColor(0, 0, 0)
                     
         # Additional Text Content is omitted from the DOCX file per user request
             

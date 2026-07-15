@@ -6,6 +6,13 @@ let activeFile = '';
 let isDirty = false;
 let duration = 0;
 let deletedSentences = [];
+let deletedWords = [];
+let activeAudioObjectUrl = '';
+let audioFailureNotified = false;
+let activeAudioSourceLabel = '';
+
+const MEDIA_CACHE_DB = 'pps-local-media';
+const MEDIA_CACHE_STORE = 'files';
 
 // DOM Elements
 const selectFileEl = document.getElementById('chunker-file-select');
@@ -28,6 +35,97 @@ const sessionsEmptyState = document.getElementById('sessions-empty-state');
 const sessionsList = document.getElementById('sessions-list');
 const deletedCountBadge = document.getElementById('deleted-count-badge');
 const deletedSentencesWrapper = document.getElementById('deleted-sentences-wrapper');
+
+function openMediaCache() {
+    return new Promise((resolve, reject) => {
+        const request = indexedDB.open(MEDIA_CACHE_DB, 1);
+        request.onupgradeneeded = () => {
+            const db = request.result;
+            if (!db.objectStoreNames.contains(MEDIA_CACHE_STORE)) {
+                db.createObjectStore(MEDIA_CACHE_STORE, { keyPath: 'name' });
+            }
+        };
+        request.onsuccess = () => resolve(request.result);
+        request.onerror = () => reject(request.error);
+    });
+}
+
+async function getCachedMediaFile(filename) {
+    const db = await openMediaCache();
+    try {
+        return await new Promise((resolve, reject) => {
+            const tx = db.transaction(MEDIA_CACHE_STORE, 'readonly');
+            const request = tx.objectStore(MEDIA_CACHE_STORE).get(filename);
+            request.onsuccess = () => resolve(request.result || null);
+            request.onerror = () => reject(request.error);
+        });
+    } finally {
+        db.close();
+    }
+}
+
+async function cacheMediaFile(filename, file) {
+    if (!filename || !file) return;
+    const db = await openMediaCache();
+    try {
+        await new Promise((resolve, reject) => {
+            const tx = db.transaction(MEDIA_CACHE_STORE, 'readwrite');
+            tx.objectStore(MEDIA_CACHE_STORE).put({
+                name: filename,
+                blob: file,
+                type: file.type || 'application/octet-stream',
+                updated_at: Date.now()
+            });
+            tx.oncomplete = resolve;
+            tx.onerror = () => reject(tx.error);
+        });
+    } finally {
+        db.close();
+    }
+}
+
+function setAudioSource(source, label, isObjectUrl = false) {
+    if (activeAudioObjectUrl && activeAudioObjectUrl !== source) {
+        URL.revokeObjectURL(activeAudioObjectUrl);
+    }
+    activeAudioObjectUrl = isObjectUrl ? source : '';
+    audioPlayer.src = source;
+    audioPlayer.load();
+    audioFailureNotified = false;
+    activeAudioSourceLabel = label;
+    const mediaSourceLabel = document.getElementById('media-source-label');
+    if (mediaSourceLabel) {
+        mediaSourceLabel.textContent = label;
+        mediaSourceLabel.style.color = 'var(--color-success)';
+    }
+}
+
+async function loadBestAudioSource(filename) {
+    try {
+        const cached = await getCachedMediaFile(filename);
+        if (cached && cached.blob) {
+            const objectUrl = URL.createObjectURL(cached.blob);
+            setAudioSource(objectUrl, `Source: Cached Local Media (${filename})`, true);
+            return;
+        }
+    } catch (err) {
+        console.warn('Could not read cached media:', err);
+    }
+
+    setAudioSource(`/uploads/${encodeURIComponent(filename)}`, `Source: Server Media (${filename})`);
+}
+
+function showAudioFailure() {
+    const mediaSourceLabel = document.getElementById('media-source-label');
+    if (mediaSourceLabel) {
+        mediaSourceLabel.textContent = 'Audio unavailable. Choose the original local media file.';
+        mediaSourceLabel.style.color = 'var(--color-danger)';
+    }
+    if (!audioFailureNotified) {
+        audioFailureNotified = true;
+        console.warn('The current audio source could not be played. Use Load Local Media to reconnect it.');
+    }
+}
 
 // Setup
 document.addEventListener('DOMContentLoaded', () => {
@@ -126,8 +224,11 @@ function setupLocalMediaLoader() {
         localMediaSelect.addEventListener('change', (e) => {
             const file = e.target.files[0];
             if (file) {
-                audioPlayer.src = URL.createObjectURL(file);
-                audioPlayer.load();
+                const objectUrl = URL.createObjectURL(file);
+                setAudioSource(objectUrl, `Source: Local File (${file.name})`, true);
+                if (activeFile) {
+                    cacheMediaFile(activeFile, file).catch(err => console.warn('Could not cache local media:', err));
+                }
                 if (mediaSourceLabel) {
                     mediaSourceLabel.textContent = `Source: Local File (${file.name})`;
                     mediaSourceLabel.style.color = 'var(--color-success)';
@@ -182,6 +283,19 @@ function setupEventListeners() {
 
     // Sync Audio player with UI highlighters
     audioPlayer.addEventListener('timeupdate', syncAudioTime);
+    audioPlayer.addEventListener('error', showAudioFailure);
+    audioPlayer.addEventListener('stalled', () => {
+        const mediaSourceLabel = document.getElementById('media-source-label');
+        if (mediaSourceLabel) mediaSourceLabel.textContent = 'Audio is buffering…';
+    });
+    audioPlayer.addEventListener('canplay', () => {
+        audioFailureNotified = false;
+        const mediaSourceLabel = document.getElementById('media-source-label');
+        if (mediaSourceLabel && activeAudioSourceLabel) {
+            mediaSourceLabel.textContent = activeAudioSourceLabel;
+            mediaSourceLabel.style.color = 'var(--color-success)';
+        }
+    });
 
     // Warn user of unsaved changes before page unload
     window.addEventListener('beforeunload', (e) => {
@@ -215,16 +329,8 @@ async function handleFileSelection(filename) {
     btnSaveSessions.disabled = true;
     btnConfirmChunks.disabled = true;
     
-    // Set Audio source (use blob url from local storage libraries if found)
-    const vercelLib = JSON.parse(localStorage.getItem('vercel_library') || '[]')
-        .concat(JSON.parse(localStorage.getItem('processed_files_registry') || '[]'));
-    const localFile = vercelLib.find(f => f.name === filename);
-    if (localFile && localFile.url && localFile.url.startsWith('blob:')) {
-        audioPlayer.src = localFile.url;
-    } else {
-        audioPlayer.src = `/uploads/${filename}`;
-    }
-    audioPlayer.load();
+    // Prefer the durable browser media cache. Fall back to the server copy.
+    await loadBestAudioSource(filename);
 
     try {
         let data;
@@ -243,8 +349,7 @@ async function handleFileSelection(filename) {
             data = await sentResp.json();
         }
         
-        sentences = data.sentences;
-        allSentences = [...data.sentences];
+        sentences = normalizeSentenceWords(data.sentences);
         duration = data.duration;
 
         // Fetch existing sessions chunks from localStorage or server
@@ -255,11 +360,12 @@ async function handleFileSelection(filename) {
         if (cachedChunks) {
             console.log("Loading chunks from localStorage...");
             const chunkObj = JSON.parse(cachedChunks);
-            const deletedObj = cachedDeleted ? JSON.parse(cachedDeleted) : { deleted_sentences: [] };
+            const deletedObj = cachedDeleted ? JSON.parse(cachedDeleted) : { deleted_sentences: [], deleted_words: [] };
             chunkData = {
                 exists: true,
                 sessions: chunkObj.sessions,
-                deleted_sentences: deletedObj.deleted_sentences || []
+                deleted_sentences: deletedObj.deleted_sentences || [],
+                deleted_words: deletedObj.deleted_words || []
             };
         } else {
             try {
@@ -278,6 +384,13 @@ async function handleFileSelection(filename) {
         if (chunkData.exists) {
             sessions = chunkData.sessions;
             deletedSentences = chunkData.deleted_sentences || [];
+            deletedWords = chunkData.deleted_words || [];
+
+            applyDeletedWords(sentences, deletedWords);
+            allSentences = sentences.map(sentence => ({
+                ...sentence,
+                words: (sentence.words || []).map(word => ({ ...word }))
+            }));
             
             // Filter out deleted sentences from active sentences list
             const deletedIds = new Set(deletedSentences.map(d => d.id));
@@ -285,6 +398,11 @@ async function handleFileSelection(filename) {
         } else {
             sessions = [];
             deletedSentences = [];
+            deletedWords = [];
+            allSentences = sentences.map(sentence => ({
+                ...sentence,
+                words: (sentence.words || []).map(word => ({ ...word }))
+            }));
         }
         
         sentenceCountBadge.textContent = `${sentences.length} Sentences`;
@@ -303,6 +421,58 @@ async function handleFileSelection(filename) {
         console.error(err);
         alert('Error loading file data: ' + err.message);
     }
+}
+
+function makeWordId(sentenceId, word, index) {
+    const start = Number(word.start || 0).toFixed(3);
+    const end = Number(word.end || 0).toFixed(3);
+    return `${sentenceId}:${index}:${start}:${end}`;
+}
+
+function joinTranscriptWords(words) {
+    return (words || [])
+        .map(word => (word.word || '').trim())
+        .filter(Boolean)
+        .join(' ')
+        .replace(/\s+([,.;:!?%])/g, '$1')
+        .replace(/([([{])\s+/g, '$1')
+        .replace(/\s+(['’](?:s|t|re|ve|ll|d|m))\b/gi, '$1')
+        .trim();
+}
+
+function normalizeSentenceWords(sentenceList) {
+    return (sentenceList || []).map(sentence => {
+        const words = (sentence.words || []).map((word, index) => ({
+            ...word,
+            word_id: word.word_id || makeWordId(sentence.id, word, index)
+        }));
+        return { ...sentence, words };
+    });
+}
+
+function applyDeletedWords(sentenceList, deletedWordList) {
+    const deletedIds = new Set((deletedWordList || []).map(word => word.word_id));
+    sentenceList.forEach(sentence => {
+        if (!sentence.words || sentence.words.length === 0) return;
+        sentence.words = sentence.words.filter(word => !deletedIds.has(word.word_id));
+        sentence.text = joinTranscriptWords(sentence.words);
+        if (sentence.words.length > 0) {
+            sentence.start = sentence.words[0].start;
+            sentence.end = sentence.words[sentence.words.length - 1].end;
+        }
+    });
+}
+
+function renderSentenceWords(sentence) {
+    if (!sentence.words || sentence.words.length === 0) {
+        return escapeHtml(sentence.text);
+    }
+    return sentence.words.map(word => `
+        <span class="editable-transcript-word" title="${formatTimePrecise(word.start)} – ${formatTimePrecise(word.end)}">
+            <span>${escapeHtml(word.word)}</span>
+            <button type="button" class="btn-delete-word" data-sentence-id="${sentence.id}" data-word-id="${escapeHtml(word.word_id)}" title="Delete only this word">×</button>
+        </span>
+    `).join(' ');
 }
 
 // Render the raw sentences list on the left side
@@ -328,7 +498,7 @@ function renderSentencesList() {
         item.innerHTML = `
             <div class="sentence-subchunk-index">${s.id}</div>
             <div class="sentence-subchunk-content">
-                <p class="sentence-subchunk-text">${escapeHtml(s.text)}</p>
+                <p class="sentence-subchunk-text">${renderSentenceWords(s)}</p>
                 <p class="sentence-subchunk-time">${formatTime(s.start)} — ${formatTime(s.end)}</p>
             </div>
             <div class="sentence-subchunk-actions" style="display: flex; gap: 6px; align-items: center; flex-shrink: 0;">
@@ -364,8 +534,15 @@ function renderSentencesList() {
         // Seek Audio on click
         item.addEventListener('click', (e) => {
             // Avoid seeking if clicking action buttons
-            if (e.target.closest('.btn-split-here') || e.target.closest('.btn-delete-sentence-left')) return;
+            if (e.target.closest('.btn-split-here') || e.target.closest('.btn-delete-sentence-left') || e.target.closest('.btn-delete-word')) return;
             seekAudio(s.start);
+        });
+
+        item.querySelectorAll('.btn-delete-word').forEach(button => {
+            button.addEventListener('click', (e) => {
+                e.stopPropagation();
+                deleteWord(button.dataset.sentenceId, button.dataset.wordId);
+            });
         });
 
         // Split button action
@@ -577,7 +754,8 @@ function renderSessions() {
 
     sessionsEmptyState.classList.add('hidden');
     sessionsList.classList.remove('hidden');
-    btnConfirmChunks.disabled = false;
+    const hasEmptySessions = sessions.some(session => !session.sentence_indices || session.sentence_indices.length === 0);
+    btnConfirmChunks.disabled = hasEmptySessions;
 
     // Ensure timestamps are updated on session objects in state
     recalculateSessionTimestamps();
@@ -590,6 +768,9 @@ function renderSessions() {
         const card = document.createElement('div');
         card.className = `session-card${isRepeat ? ' repeat-chunk' : ''}`;
         card.id = `session-card-${index}`;
+        if (!session.sentence_indices || session.sentence_indices.length === 0) {
+            card.style.borderColor = 'var(--color-danger)';
+        }
 
         // Action buttons
         const isFirst = index === 0;
@@ -891,14 +1072,18 @@ function setupApiKeyValidation() {
                 });
                 const data = await resp.json();
                 if (data.has_key) {
-                    if (data.valid) {
+                    if (data.valid === true) {
                         statusEl.className = 'key-validation-status valid';
                         statusEl.innerHTML = '<i class="fa-solid fa-circle-check"></i> Server API key is verified and active.';
                         apiKeyInput.style.borderColor = 'var(--color-success)';
-                    } else {
+                    } else if (data.valid === false) {
                         statusEl.className = 'key-validation-status invalid';
                         statusEl.innerHTML = `<i class="fa-solid fa-circle-xmark"></i> Server API key validation failed: ${data.error || 'Invalid key'}`;
                         apiKeyInput.style.borderColor = 'var(--color-danger)';
+                    } else {
+                        statusEl.className = 'key-validation-status';
+                        statusEl.innerHTML = '<i class="fa-solid fa-triangle-exclamation"></i> Server key is configured but could not be verified yet.';
+                        apiKeyInput.style.borderColor = '';
                     }
                 } else {
                     statusEl.className = 'key-validation-status';
@@ -913,10 +1098,11 @@ function setupApiKeyValidation() {
             return;
         }
 
-        // Validate format first
-        if (!key.startsWith('sk-or-')) {
+        // Avoid rejecting future OpenRouter key prefixes; only catch obvious
+        // paste mistakes here and let OpenRouter authenticate the key itself.
+        if (key.length < 20 || /\s/.test(key)) {
             statusEl.className = 'key-validation-status invalid';
-            statusEl.innerHTML = '<i class="fa-solid fa-circle-xmark"></i> Invalid format (should start with sk-or-)';
+            statusEl.innerHTML = '<i class="fa-solid fa-circle-xmark"></i> The key looks incomplete or contains spaces.';
             apiKeyInput.style.borderColor = 'var(--color-danger)';
             return;
         }
@@ -932,14 +1118,18 @@ function setupApiKeyValidation() {
                 body: JSON.stringify({ api_key: key })
             });
             const data = await resp.json();
-            if (data.valid) {
+            if (data.valid === true) {
                 statusEl.className = 'key-validation-status valid';
                 statusEl.innerHTML = '<i class="fa-solid fa-circle-check"></i> API key is verified and active.';
                 apiKeyInput.style.borderColor = 'var(--color-success)';
-            } else {
+            } else if (data.valid === false) {
                 statusEl.className = 'key-validation-status invalid';
                 statusEl.innerHTML = `<i class="fa-solid fa-circle-xmark"></i> API key verification failed: ${data.error || 'Invalid key'}`;
                 apiKeyInput.style.borderColor = 'var(--color-danger)';
+            } else {
+                statusEl.className = 'key-validation-status';
+                statusEl.innerHTML = `<i class="fa-solid fa-triangle-exclamation"></i> Key saved, but OpenRouter could not verify it yet. It will still be used for generation.`;
+                apiKeyInput.style.borderColor = '';
             }
         } catch (err) {
             statusEl.className = 'key-validation-status';
@@ -993,9 +1183,26 @@ async function runAIChunking() {
     try {
         const BATCH_SIZE = 20;
         const sentencePayload = sentences.map(s => ({ id: s.id, text: s.text }));
-        const builtSessions = [];
+        const progressKey = 'chunking_progress_' + activeFile;
+        let builtSessions = [];
+        let startOffset = 0;
+
+        // Resume a previous interrupted run when it used the same source and model.
+        try {
+            const checkpoint = JSON.parse(localStorage.getItem(progressKey) || 'null');
+            if (checkpoint && checkpoint.model === model &&
+                checkpoint.sentenceCount === sentencePayload.length &&
+                Array.isArray(checkpoint.builtSessions) &&
+                checkpoint.nextOffset > 0 && checkpoint.nextOffset < sentencePayload.length) {
+                builtSessions = checkpoint.builtSessions;
+                startOffset = checkpoint.nextOffset;
+            }
+        } catch (checkpointError) {
+            console.warn('Ignoring invalid chunking checkpoint:', checkpointError);
+            localStorage.removeItem(progressKey);
+        }
         
-        for (let i = 0; i < sentencePayload.length; i += BATCH_SIZE) {
+        for (let i = startOffset; i < sentencePayload.length; i += BATCH_SIZE) {
             const currentBatch = sentencePayload.slice(i, i + BATCH_SIZE);
             let batchToChunk = currentBatch;
             let replaceCount = 0;
@@ -1015,33 +1222,68 @@ async function runAIChunking() {
             const totalBatches = Math.ceil(sentencePayload.length / BATCH_SIZE);
             btnRun.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> Chunking ${batchNumber}/${totalBatches}...`;
             
-            const resp = await fetch('/api/chunk-sessions', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'X-OpenRouter-Key': keyOverride
-                },
-                body: JSON.stringify({
-                    sentences: batchToChunk,
-                    model: model,
-                    single_batch: true
-                })
-            });
-            
-            const data = await parseJsonResponse(resp, 'Auto-Chunk');
-            
-            if (!resp.ok) {
-                throw new Error(data.error || 'AI model processing failed.');
+            let data = null;
+            let lastBatchError = null;
+            for (let attempt = 0; attempt < 3; attempt++) {
+                try {
+                    const resp = await fetch('/api/chunk-sessions', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'X-OpenRouter-Key': keyOverride
+                        },
+                        body: JSON.stringify({
+                            sentences: batchToChunk,
+                            model: model,
+                            single_batch: true
+                        })
+                    });
+
+                    data = await parseJsonResponse(resp, 'Auto-Chunk');
+                    if (resp.ok) break;
+
+                    lastBatchError = new Error(data.error || 'AI model processing failed.');
+                    const retryable = resp.status === 429 || resp.status >= 500;
+                    if (!retryable) lastBatchError.nonRetryable = true;
+                    if (!retryable || attempt === 2) throw lastBatchError;
+                } catch (requestError) {
+                    lastBatchError = requestError;
+                    if (requestError.nonRetryable || attempt === 2) throw requestError;
+                }
+
+                btnRun.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> Retrying ${batchNumber}/${totalBatches}...`;
+                await new Promise(resolve => setTimeout(resolve, 1500 * (attempt + 1)));
+            }
+
+            if (!data || !Array.isArray(data.sessions)) {
+                throw lastBatchError || new Error('The AI returned no chunk data.');
             }
             
             if (replaceCount > 0) {
                 builtSessions.splice(-replaceCount, replaceCount);
             }
             builtSessions.push(...normalizeChunkSessions(data.sessions));
+
+            const nextOffset = Math.min(i + BATCH_SIZE, sentencePayload.length);
+            localStorage.setItem(progressKey, JSON.stringify({
+                model: model,
+                sentenceCount: sentencePayload.length,
+                nextOffset: nextOffset,
+                builtSessions: builtSessions
+            }));
+
+            // Make every completed batch immediately usable and recoverable.
+            const processedSentences = sentencePayload.slice(0, nextOffset);
+            sessions = reconcileSessions(builtSessions, processedSentences);
+            localStorage.setItem('chunks_' + activeFile, JSON.stringify({ sessions: sessions }));
+            renderSessions();
+            markDirty();
         }
 
         // Reconcile and clean up sessions to guarantee ordering and no duplicates/gaps
         sessions = reconcileSessions(builtSessions, sentencePayload);
+        localStorage.setItem('chunks_' + activeFile, JSON.stringify({ sessions: sessions }));
+        localStorage.removeItem(progressKey);
         
         // Re-render
         renderSessions();
@@ -1050,7 +1292,7 @@ async function runAIChunking() {
         
     } catch (err) {
         console.error(err);
-        alert('Failed to Auto-Chunk: ' + err.message);
+        alert('Auto-Chunk paused: ' + err.message + '\n\nCompleted batches were saved. Click Auto-Chunk again to resume.');
     } finally {
         btnRun.disabled = false;
         btnRun.innerHTML = '<i class="fa-solid fa-wand-magic-sparkles"></i> Auto-Chunk';
@@ -1066,11 +1308,12 @@ async function saveChunksToServer() {
     
     // Save to localStorage as a primary backup (crucial for stateless environments like Vercel)
     localStorage.setItem('chunks_' + activeFile, JSON.stringify({ sessions: sessions }));
-    localStorage.setItem('deleted_' + activeFile, JSON.stringify({ deleted_sentences: deletedSentences }));
+    localStorage.setItem('deleted_' + activeFile, JSON.stringify({ deleted_sentences: deletedSentences, deleted_words: deletedWords }));
     
     const payload = {
         sessions: sessions,
-        deleted_sentences: deletedSentences
+        deleted_sentences: deletedSentences,
+        deleted_words: deletedWords
     };
     
     // Retrieve transcript from localStorage to enable server self-healing
@@ -1113,17 +1356,28 @@ async function confirmChunksAndNext() {
         alert('Please create some sessions first.');
         return;
     }
+
+    const emptySessionNumbers = sessions
+        .map((session, index) => (!session.sentence_indices || session.sentence_indices.length === 0) ? index + 1 : null)
+        .filter(Boolean);
+    if (emptySessionNumbers.length > 0) {
+        alert(`Cannot continue: Session ${emptySessionNumbers.join(', ')} ${emptySessionNumbers.length === 1 ? 'is' : 'are'} empty. Add a sentence or delete the empty session first.`);
+        renderSessions();
+        return;
+    }
     
     btnConfirmChunks.disabled = true;
     btnConfirmChunks.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Confirming...';
     
     // Save to localStorage as a primary backup (crucial for stateless environments like Vercel)
     localStorage.setItem('chunks_' + activeFile, JSON.stringify({ sessions: sessions }));
-    localStorage.setItem('deleted_' + activeFile, JSON.stringify({ deleted_sentences: deletedSentences }));
+    localStorage.setItem('deleted_' + activeFile, JSON.stringify({ deleted_sentences: deletedSentences, deleted_words: deletedWords }));
     
     const payload = {
         sessions: sessions,
-        deleted_sentences: deletedSentences
+        deleted_sentences: deletedSentences,
+        deleted_words: deletedWords,
+        confirm: true
     };
     
     // Retrieve transcript from localStorage to enable server self-healing
@@ -1170,6 +1424,7 @@ function exportSessionsJSON() {
         filename: activeFile,
         duration: duration,
         deleted_sentences: deletedSentences,
+        deleted_words: deletedWords,
         sessions: sessions.map((s, idx) => {
             return {
                 id: idx,
@@ -1232,11 +1487,17 @@ function handleImportJSON(e) {
             // Set states
             sessions = data.sessions || [];
             deletedSentences = data.deleted_sentences || [];
+            deletedWords = data.deleted_words || [];
 
             // Filter out deleted sentences from original sentences list
+            originalSentences = normalizeSentenceWords(originalSentences);
+            applyDeletedWords(originalSentences, deletedWords);
             const deletedIds = new Set(deletedSentences.map(d => d.id));
             sentences = originalSentences.filter(s => !deletedIds.has(s.id));
-            allSentences = [...originalSentences];
+            allSentences = originalSentences.map(sentence => ({
+                ...sentence,
+                words: (sentence.words || []).map(word => ({ ...word }))
+            }));
 
             // Re-render components
             recalculateSessionTimestamps();
@@ -1247,7 +1508,7 @@ function handleImportJSON(e) {
 
             // Save to localStorage
             localStorage.setItem('chunks_' + activeFile, JSON.stringify({ sessions: sessions }));
-            localStorage.setItem('deleted_' + activeFile, JSON.stringify({ deleted_sentences: deletedSentences }));
+            localStorage.setItem('deleted_' + activeFile, JSON.stringify({ deleted_sentences: deletedSentences, deleted_words: deletedWords }));
 
             alert('Checkpoint JSON imported successfully!');
         } catch (err) {
@@ -1463,9 +1724,28 @@ function addSessionManually() {
 
 // AUDIO SYNCHRONIZATION PLAYBACK & CSS HIGH LIGHTING
 
-function seekAudio(seconds) {
-    audioPlayer.currentTime = seconds;
-    audioPlayer.play().catch(err => console.log('Audio autoplay blocked or failed:', err));
+async function seekAudio(seconds) {
+    try {
+        if (!audioPlayer.src) throw new Error('No audio source is connected.');
+        if (audioPlayer.readyState < HTMLMediaElement.HAVE_METADATA) {
+            await new Promise((resolve, reject) => {
+                const timer = setTimeout(() => reject(new Error('Audio metadata did not load.')), 5000);
+                audioPlayer.addEventListener('loadedmetadata', () => {
+                    clearTimeout(timer);
+                    resolve();
+                }, { once: true });
+                audioPlayer.addEventListener('error', () => {
+                    clearTimeout(timer);
+                    reject(new Error('Audio source could not be played.'));
+                }, { once: true });
+            });
+        }
+        audioPlayer.currentTime = Math.max(0, Math.min(Number(seconds) || 0, audioPlayer.duration || Number(seconds) || 0));
+        await audioPlayer.play();
+    } catch (err) {
+        console.warn('Audio playback failed:', err);
+        showAudioFailure();
+    }
 }
 
 function syncAudioTime() {
@@ -1522,6 +1802,13 @@ function formatTime(seconds) {
     return `${mins}:${secs < 10 ? '0' : ''}${secs}`;
 }
 
+function formatTimePrecise(seconds) {
+    const value = Math.max(0, Number(seconds) || 0);
+    const mins = Math.floor(value / 60);
+    const secs = (value % 60).toFixed(1).padStart(4, '0');
+    return `${mins}:${secs}`;
+}
+
 function escapeHtml(text) {
     if (!text) return '';
     return text.toString()
@@ -1536,17 +1823,17 @@ function escapeHtml(text) {
 
 function renderDeletedSentences() {
     if (deletedCountBadge) {
-        deletedCountBadge.textContent = `${deletedSentences.length} Deleted`;
+        deletedCountBadge.textContent = `${deletedSentences.length + deletedWords.length} Deleted`;
     }
     
     if (!deletedSentencesWrapper) return;
     
     deletedSentencesWrapper.innerHTML = '';
     
-    if (deletedSentences.length === 0) {
+    if (deletedSentences.length === 0 && deletedWords.length === 0) {
         deletedSentencesWrapper.innerHTML = `
             <div class="workspace-empty-mini">
-                No sentences deleted yet
+                No sentences or words deleted yet
             </div>
         `;
         return;
@@ -1577,6 +1864,99 @@ function renderDeletedSentences() {
         
         deletedSentencesWrapper.appendChild(item);
     });
+
+    deletedWords
+        .slice()
+        .sort((a, b) => Number(a.start || 0) - Number(b.start || 0))
+        .forEach(word => {
+            const item = document.createElement('div');
+            item.className = 'deleted-sentence-item';
+            item.innerHTML = `
+                <div class="sentence-subchunk-index" style="width: 20px; height: 20px; font-size: 0.58rem; border-radius: 5px;">W</div>
+                <div style="flex: 1;">
+                    <div class="deleted-sentence-text"><span style="font-weight: 400;">Deleted word:</span> <strong>${escapeHtml(word.word)}</strong></div>
+                    <div class="deleted-sentence-time">${formatTimePrecise(word.start)} — ${formatTimePrecise(word.end)}</div>
+                </div>
+                <button class="btn-restore-sentence btn-restore-word" title="Restore word">
+                    <i class="fa-solid fa-arrow-rotate-left"></i>
+                </button>
+            `;
+            item.querySelector('.btn-restore-word').addEventListener('click', (e) => {
+                e.stopPropagation();
+                restoreWord(word.word_id);
+            });
+            deletedSentencesWrapper.appendChild(item);
+        });
+}
+
+function updateSentenceFromWords(sentence) {
+    if (!sentence || !sentence.words || sentence.words.length === 0) return;
+    sentence.words.sort((a, b) => Number(a.start || 0) - Number(b.start || 0));
+    sentence.text = joinTranscriptWords(sentence.words);
+    sentence.start = sentence.words[0].start;
+    sentence.end = sentence.words[sentence.words.length - 1].end;
+}
+
+function deleteWord(sentenceId, wordId) {
+    sentenceId = parseInt(sentenceId);
+    const sentence = sentences.find(item => item.id === sentenceId);
+    if (!sentence || !sentence.words) return;
+    if (sentence.words.length <= 1) {
+        alert('A sentence must retain at least one word. Delete the whole sentence instead.');
+        return;
+    }
+
+    const wordIndex = sentence.words.findIndex(word => word.word_id === wordId);
+    if (wordIndex === -1) return;
+    const [word] = sentence.words.splice(wordIndex, 1);
+    if (!deletedWords.some(item => item.word_id === word.word_id)) {
+        deletedWords.push({
+            sentence_id: sentenceId,
+            word_id: word.word_id,
+            word: word.word,
+            start: word.start,
+            end: word.end
+        });
+    }
+    updateSentenceFromWords(sentence);
+
+    const allSentence = allSentences.find(item => item.id === sentenceId);
+    if (allSentence && allSentence !== sentence) {
+        allSentence.words = (allSentence.words || []).filter(item => item.word_id !== wordId);
+        updateSentenceFromWords(allSentence);
+    }
+
+    markDirty();
+    renderSentencesList();
+    renderSessions();
+    renderDeletedSentences();
+}
+
+function restoreWord(wordId) {
+    const deletedIndex = deletedWords.findIndex(word => word.word_id === wordId);
+    if (deletedIndex === -1) return;
+    const record = deletedWords[deletedIndex];
+    const restoredWord = {
+        word_id: record.word_id,
+        word: record.word,
+        start: record.start,
+        end: record.end
+    };
+
+    const sentence = sentences.find(item => item.id === Number(record.sentence_id));
+    const allSentence = allSentences.find(item => item.id === Number(record.sentence_id));
+    [sentence, allSentence].forEach(target => {
+        if (!target || (target.words || []).some(word => word.word_id === wordId)) return;
+        target.words = target.words || [];
+        target.words.push({ ...restoredWord });
+        updateSentenceFromWords(target);
+    });
+    deletedWords.splice(deletedIndex, 1);
+
+    markDirty();
+    renderSentencesList();
+    renderSessions();
+    renderDeletedSentences();
 }
 
 function deleteSentence(sentenceId) {
