@@ -1802,6 +1802,75 @@ def export_docx(filename):
         text = re.sub(r'\s+([,.;:!?%])', r'\1', text).strip()
         sentence['text'] = text
 
+    # Estimate video duration in seconds
+    duration_sec = 0.0
+    if sentences_map:
+        for s in sentences_map.values():
+            duration_sec = max(duration_sec, s.get('end', 0.0))
+            
+    if duration_sec == 0.0 and sessions_data:
+        max_session_ts = 0.0
+        for s in sessions_data:
+            max_session_ts = max(max_session_ts, abs(s.get('end', 0.0)))
+        if max_session_ts > 10000.0:
+            duration_sec = max_session_ts / 1000.0
+        else:
+            duration_sec = max_session_ts
+            
+    if duration_sec == 0.0:
+        duration_sec = 3600.0  # Fallback to 1 hour
+        
+    # Detect and normalize deleted_sentences if they are in milliseconds
+    max_deleted_ts = 0.0
+    if deleted_sentences:
+        for ds in deleted_sentences:
+            max_deleted_ts = max(max_deleted_ts, abs(ds.get('start', 0.0)), abs(ds.get('end', 0.0)))
+    if max_deleted_ts > (duration_sec + 10.0):
+        for ds in deleted_sentences:
+            if 'start' in ds:
+                ds['start'] = ds.get('start', 0.0) / 1000.0
+            if 'end' in ds:
+                ds['end'] = ds.get('end', 0.0) / 1000.0
+
+    # Detect and normalize sessions start/end if they are in milliseconds
+    max_session_ts = 0.0
+    if sessions_data:
+        for s in sessions_data:
+            max_session_ts = max(max_session_ts, abs(s.get('start', 0.0)), abs(s.get('end', 0.0)))
+    if max_session_ts > (duration_sec + 10.0):
+        for s in sessions_data:
+            if 'start' in s:
+                s['start'] = s.get('start', 0.0) / 1000.0
+            if 'end' in s:
+                s['end'] = s.get('end', 0.0) / 1000.0
+
+    # Detect and normalize visuals items and details if they are in milliseconds
+    max_visual_ts = 0.0
+    if sessions_data:
+        for s in sessions_data:
+            visuals = s.get('visuals', {})
+            if visuals:
+                v_content = visuals.get('content', {})
+                if v_content:
+                    for item in v_content.get('items', []):
+                        max_visual_ts = max(max_visual_ts, abs(item.get('timestamp', 0.0)))
+                    for detail in v_content.get('details', []):
+                        max_visual_ts = max(max_visual_ts, abs(detail.get('timestamp', 0.0)))
+    if max_visual_ts > (duration_sec + 10.0):
+        for s in sessions_data:
+            visuals = s.get('visuals', {})
+            if visuals:
+                v_content = visuals.get('content', {})
+                if v_content:
+                    v_items = v_content.get('items', [])
+                    for item in v_items:
+                        if 'timestamp' in item:
+                            item['timestamp'] = item.get('timestamp', 0.0) / 1000.0
+                    v_details = v_content.get('details', [])
+                    for detail in v_details:
+                        if 'timestamp' in detail:
+                            detail['timestamp'] = detail.get('timestamp', 0.0) / 1000.0
+
     # Parse time increment if provided and shift timestamps
     time_increment = data.get('time_increment', '')
     time_shift = parse_time_increment(time_increment)
@@ -1883,17 +1952,23 @@ def export_docx(filename):
         tcPr.append(tcBorders)
 
     def format_seconds(seconds):
-        is_neg = seconds < 0
-        total_tenths = int(round(abs(float(seconds)) * 10))
-        hours, remainder = divmod(total_tenths, 36000)
-        mins, second_tenths = divmod(remainder, 600)
-        whole_seconds, tenths = divmod(second_tenths, 10)
-        seconds_text = f"{whole_seconds:02d}" if tenths == 0 else f"{whole_seconds:02d}.{tenths}"
+        if seconds is None:
+            return "0:00"
+        val = float(seconds)
+        
+        # Round to the nearest second
+        val = int(val + 0.5) if val >= 0 else int(val - 0.5)
+        
+        is_neg = val < 0
+        val = abs(val)
+        hours = int(val // 3600)
+        mins = int((val % 3600) // 60)
+        secs = int(val % 60)
         prefix = "-" if is_neg else ""
         if hours > 0:
-            return f"{prefix}{hours:02d}:{mins:02d}:{seconds_text}"
+            return f"{prefix}{hours:02d}:{mins:02d}:{secs:02d}"
         else:
-            return f"{prefix}{mins}:{seconds_text}"
+            return f"{prefix}{mins}:{secs:02d}"
 
     # Create document
     doc = Document()
