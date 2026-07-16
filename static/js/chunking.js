@@ -395,6 +395,12 @@ async function handleFileSelection(filename) {
             // Filter out deleted sentences from active sentences list
             const deletedIds = new Set(deletedSentences.map(d => d.id));
             sentences = sentences.filter(s => !deletedIds.has(s.id));
+
+            if (sessions.length > 0 && !sessionsCoverActiveSentences(sessions, sentences)) {
+                sessions = [];
+                localStorage.removeItem('chunking_progress_' + filename);
+                alert('Sentence boundaries were refreshed for this transcript. Run Auto-Chunk again to rebuild the sessions with the corrected sentences.');
+            }
         } else {
             sessions = [];
             deletedSentences = [];
@@ -463,6 +469,15 @@ function applyDeletedWords(sentenceList, deletedWordList) {
     });
 }
 
+function sessionsCoverActiveSentences(sessionList, sentenceList) {
+    const activeIds = new Set((sentenceList || []).map(sentence => sentence.id));
+    const mappedIds = new Set();
+    (sessionList || []).forEach(session => {
+        (session.sentence_indices || []).forEach(id => mappedIds.add(id));
+    });
+    return activeIds.size === mappedIds.size && [...activeIds].every(id => mappedIds.has(id));
+}
+
 function renderSentenceWords(sentence) {
     if (!sentence.words || sentence.words.length === 0) {
         return escapeHtml(sentence.text);
@@ -470,7 +485,7 @@ function renderSentenceWords(sentence) {
     return sentence.words.map(word => `
         <span class="editable-transcript-word" title="${formatTimePrecise(word.start)} – ${formatTimePrecise(word.end)}">
             <span>${escapeHtml(word.word)}</span>
-            <button type="button" class="btn-delete-word" data-sentence-id="${sentence.id}" data-word-id="${escapeHtml(word.word_id)}" title="Delete only this word">×</button>
+            <button type="button" class="btn-delete-word" data-sentence-id="${sentence.id}" data-word-id="${escapeHtml(word.word_id)}" title="Delete only this word" aria-label="Delete word ${escapeHtml(word.word)}">×</button>
         </span>
     `).join(' ');
 }
@@ -846,7 +861,7 @@ function renderSessions() {
                 sentItem.innerHTML = `
                     <div class="sentence-subchunk-index" style="width: 20px; height: 20px; font-size: 0.65rem; border-radius: 5px;">${s.id}</div>
                     <div class="session-sentence-text" style="cursor: pointer;" onclick="seekAudio(${s.start})">
-                        ${escapeHtml(s.text)}
+                        ${renderSentenceWords(s)}
                     </div>
                     <div class="session-sentence-actions">
                         ${showSplit ? `
@@ -869,6 +884,13 @@ function renderSessions() {
                         </button>
                     </div>
                 `;
+
+                sentItem.querySelectorAll('.btn-delete-word').forEach(button => {
+                    button.addEventListener('click', (event) => {
+                        event.stopPropagation();
+                        deleteWord(button.dataset.sentenceId, button.dataset.wordId);
+                    });
+                });
 
                 // Wire up actions
                 if (showSplit) {
@@ -2060,11 +2082,15 @@ function restoreSentence(sentenceId) {
 function splitTranscriptIntoSentences(transcriptData) {
     const segments = transcriptData.segments || [];
     const allWords = [];
-    for (const seg of segments) {
-        for (const w of (seg.words || [])) {
-            allWords.push(w);
-        }
-    }
+    segments.forEach(segment => {
+        const segmentWords = segment.words || [];
+        segmentWords.forEach((word, wordIndex) => {
+            allWords.push({
+                word,
+                isSegmentEnd: wordIndex === segmentWords.length - 1
+            });
+        });
+    });
     
     if (allWords.length === 0) {
         const sentences = [];
@@ -2097,8 +2123,38 @@ function splitTranscriptIntoSentences(transcriptData) {
         'eg.', 'ie.', 'a.m.', 'p.m.', 'u.s.', 'u.k.', 'jan.', 'feb.', 
         'mar.', 'apr.', 'jun.', 'jul.', 'aug.', 'sep.', 'oct.', 'nov.', 'dec.'
     ]);
+
+    const PAUSE_BOUNDARY_SECONDS = 1.25;
+    const SEGMENT_WORD_TARGET = 24;
+    const HARD_WORD_LIMIT = 36;
+
+    const appendSentence = words => {
+        if (words.length === 0) return;
+        sentences.push({
+            id: sentenceId,
+            text: joinTranscriptWords(words),
+            start: words[0].start || 0.0,
+            end: words[words.length - 1].end || 0.0,
+            words: words.map(word => ({
+                word: (word.word || '').trim(),
+                start: word.start || 0.0,
+                end: word.end || 0.0
+            }))
+        });
+        sentenceId += 1;
+    };
     
-    for (const w of allWords) {
+    for (const wrappedWord of allWords) {
+        const w = wrappedWord.word;
+        if (currentWords.length > 0) {
+            const previousWord = currentWords[currentWords.length - 1];
+            const gap = Number(w.start || 0) - Number(previousWord.end || 0);
+            if (gap >= PAUSE_BOUNDARY_SECONDS) {
+                appendSentence(currentWords);
+                currentWords = [];
+            }
+        }
+
         currentWords.push(w);
         const wordText = (w.word || '').trim();
         
@@ -2110,37 +2166,18 @@ function splitTranscriptIntoSentences(transcriptData) {
             }
         }
         
-        if (isSentenceEnd) {
-            const sentenceText = currentWords.map(cw => cw.word || '').join('').trim();
-            sentences.push({
-                id: sentenceId,
-                text: sentenceText,
-                start: currentWords[0].start || 0.0,
-                end: currentWords[currentWords.length - 1].end || 0.0,
-                words: currentWords.map(cw => ({
-                    word: (cw.word || '').trim(),
-                    start: cw.start || 0.0,
-                    end: cw.end || 0.0
-                }))
-            });
-            sentenceId += 1;
+        const fallbackBoundary = (
+            wrappedWord.isSegmentEnd && currentWords.length >= SEGMENT_WORD_TARGET
+        ) || currentWords.length >= HARD_WORD_LIMIT;
+
+        if (isSentenceEnd || fallbackBoundary) {
+            appendSentence(currentWords);
             currentWords = [];
         }
     }
     
     if (currentWords.length > 0) {
-        const sentenceText = currentWords.map(cw => cw.word || '').join('').trim();
-        sentences.push({
-            id: sentenceId,
-            text: sentenceText,
-            start: currentWords[0].start || 0.0,
-            end: currentWords[currentWords.length - 1].end || 0.0,
-            words: currentWords.map(cw => ({
-                word: (cw.word || '').trim(),
-                start: cw.start || 0.0,
-                end: cw.end || 0.0
-            }))
-        });
+        appendSentence(currentWords);
     }
     
     return sentences;

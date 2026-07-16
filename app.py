@@ -473,7 +473,7 @@ def handle_settings():
 def get_app_config():
     return jsonify({
         'modal_transcribe_url': os.getenv('MODAL_TRANSCRIBE_URL', ''),
-        'default_ai_model': DEFAULT_AI_MODEL
+        'default_ai_model': 'google/gemini-2.5-flash'
     }), 200
 
 @app.route('/api/templates', methods=['GET'])
@@ -484,7 +484,7 @@ def get_template_catalog():
             'templates': catalog,
             'template_ids': list(catalog.keys()),
             'guidelines': guidelines,
-            'default_ai_model': DEFAULT_AI_MODEL
+            'default_ai_model': 'openai/gpt-5.6-luna'
         }), 200
     except Exception as e:
         return jsonify({'error': f'Failed to load template catalog: {str(e)}'}), 500
@@ -860,8 +860,12 @@ def split_transcript_into_sentences(transcript_data):
     segments = transcript_data.get('segments', [])
     all_words = []
     for seg in segments:
-        for w in seg.get('words', []):
-            all_words.append(w)
+        segment_words = seg.get('words', [])
+        for word_index, word in enumerate(segment_words):
+            all_words.append({
+                'word': word,
+                'is_segment_end': word_index == len(segment_words) - 1
+            })
             
     if not all_words:
         # Fallback to segment-level text if no word-level timestamps exist
@@ -869,7 +873,6 @@ def split_transcript_into_sentences(transcript_data):
         sentence_id = 0
         for seg in segments:
             text = seg.get('text', '').strip()
-            import re
             parts = re.split(r'(?<=[.!?])\s+', text)
             for part in parts:
                 if part.strip():
@@ -894,7 +897,44 @@ def split_transcript_into_sentences(transcript_data):
         'mar.', 'apr.', 'jun.', 'jul.', 'aug.', 'sep.', 'oct.', 'nov.', 'dec.'
     }
     
-    for w in all_words:
+    # ASR output is not guaranteed to contain punctuation. A long pause is a
+    # strong sentence boundary, while a segment boundary gives us a safe place
+    # to cap otherwise unbounded, unpunctuated text.
+    pause_boundary_seconds = 1.25
+    segment_word_target = 24
+    hard_word_limit = 36
+
+    def append_sentence(words):
+        nonlocal sentence_id
+        if not words:
+            return
+        sentence_text = " ".join(
+            str(item.get('word', '')).strip()
+            for item in words
+            if str(item.get('word', '')).strip()
+        )
+        sentence_text = re.sub(r'\s+([,.;:!?%])', r'\1', sentence_text).strip()
+        sentences.append({
+            'id': sentence_id,
+            'text': sentence_text,
+            'start': words[0].get('start', 0.0),
+            'end': words[-1].get('end', 0.0),
+            'words': [{
+                'word': item.get('word', '').strip(),
+                'start': item.get('start', 0.0),
+                'end': item.get('end', 0.0)
+            } for item in words]
+        })
+        sentence_id += 1
+
+    for wrapped_word in all_words:
+        w = wrapped_word['word']
+        if current_words:
+            gap = float(w.get('start', 0.0) or 0.0) - float(current_words[-1].get('end', 0.0) or 0.0)
+            if gap >= pause_boundary_seconds:
+                append_sentence(current_words)
+                current_words = []
+
         current_words.append(w)
         word_text = w.get('word', '').strip()
         
@@ -908,35 +948,17 @@ def split_transcript_into_sentences(transcript_data):
             if clean_word not in ABBREVIATIONS:
                 is_sentence_end = True
             
-        if is_sentence_end:
-            text_parts = []
-            for cw in current_words:
-                text_parts.append(cw.get('word', ''))
-            sentence_text = "".join(text_parts).strip()
-            
-            sentences.append({
-                'id': sentence_id,
-                'text': sentence_text,
-                'start': current_words[0].get('start', 0.0),
-                'end': current_words[-1].get('end', 0.0),
-                'words': [{'word': cw.get('word', '').strip(), 'start': cw.get('start', 0.0), 'end': cw.get('end', 0.0)} for cw in current_words]
-            })
-            sentence_id += 1
+        fallback_boundary = (
+            wrapped_word['is_segment_end'] and len(current_words) >= segment_word_target
+        ) or len(current_words) >= hard_word_limit
+
+        if is_sentence_end or fallback_boundary:
+            append_sentence(current_words)
             current_words = []
             
     # Capture any trailing words
     if current_words:
-        text_parts = []
-        for cw in current_words:
-            text_parts.append(cw.get('word', ''))
-        sentence_text = "".join(text_parts).strip()
-        sentences.append({
-            'id': sentence_id,
-            'text': sentence_text,
-            'start': current_words[0].get('start', 0.0),
-            'end': current_words[-1].get('end', 0.0),
-            'words': [{'word': cw.get('word', '').strip(), 'start': cw.get('start', 0.0), 'end': cw.get('end', 0.0)} for cw in current_words]
-        })
+        append_sentence(current_words)
         
     return sentences
 
@@ -1051,7 +1073,7 @@ def generate_session_keypoints():
     existing_subheadings = data.get('existing_subheadings', [])
     existing_text_content = data.get('existing_text_content', '')
     existing_visuals = data.get('existing_visuals', None)
-    model_name = normalize_model_name(data.get('model'))
+    model_name = 'openai/gpt-5.6-luna'
         
     # API key from headers, request body, or environment
     api_key = get_openrouter_api_key(data)
@@ -1445,7 +1467,7 @@ def validate_key():
 def chunk_sessions():
     data = request.json or {}
     sentences = data.get('sentences', [])
-    model_name = normalize_model_name(data.get('model'))
+    model_name = 'google/gemini-2.5-flash'
     single_batch = bool(data.get('single_batch'))
         
     # API key from headers, request body, or environment

@@ -1466,12 +1466,14 @@ audio::-webkit-media-controls-time-remaining-display {
     font-size: 0.72rem;
     line-height: 1;
     padding: 0;
-    opacity: 0;
+    opacity: 0.35;
+    transition: opacity 0.15s ease, transform 0.15s ease;
 }
 
 .editable-transcript-word:hover .btn-delete-word,
 .btn-delete-word:focus {
     opacity: 1;
+    transform: scale(1.15);
 }
 .sentence-subchunk-time {
     font-size: 0.72rem;

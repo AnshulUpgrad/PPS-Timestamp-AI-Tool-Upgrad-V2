@@ -293,6 +293,12 @@ async function loadWorkspaceData() {
             // Filter out deleted sentences from active list
             const deletedIds = new Set(deletedSentences.map(d => d.id));
             sentences = sentences.filter(s => !deletedIds.has(s.id));
+
+            if (!sessionsCoverActiveSentences(sessions, sentences)) {
+                alert('The transcript now has corrected sentence boundaries. Return to Smart Chunker and run Auto-Chunk again before generating pointers.');
+                window.location.href = `/chunking?file=${encodeURIComponent(activeFile)}`;
+                return;
+            }
             
             // Flag repeating sentences (after filtering)
             detectDuplicateSentences();
@@ -1931,6 +1937,15 @@ function applyDeletedWords(sentenceList, deletedWordList) {
     });
 }
 
+function sessionsCoverActiveSentences(sessionList, sentenceList) {
+    const activeIds = new Set((sentenceList || []).map(sentence => sentence.id));
+    const mappedIds = new Set();
+    (sessionList || []).forEach(session => {
+        (session.sentence_indices || []).forEach(id => mappedIds.add(id));
+    });
+    return activeIds.size === mappedIds.size && [...activeIds].every(id => mappedIds.has(id));
+}
+
 function formatTime(seconds) {
     const mins = Math.floor(seconds / 60);
     const secs = Math.floor(seconds % 60);
@@ -1995,11 +2010,15 @@ function toggleSlideTextVisibility(index, templateName) {
 function splitTranscriptIntoSentences(transcriptData) {
     const segments = transcriptData.segments || [];
     const allWords = [];
-    for (const seg of segments) {
-        for (const w of (seg.words || [])) {
-            allWords.push(w);
-        }
-    }
+    segments.forEach(segment => {
+        const segmentWords = segment.words || [];
+        segmentWords.forEach((word, wordIndex) => {
+            allWords.push({
+                word,
+                isSegmentEnd: wordIndex === segmentWords.length - 1
+            });
+        });
+    });
     
     if (allWords.length === 0) {
         const sentences = [];
@@ -2032,8 +2051,38 @@ function splitTranscriptIntoSentences(transcriptData) {
         'eg.', 'ie.', 'a.m.', 'p.m.', 'u.s.', 'u.k.', 'jan.', 'feb.', 
         'mar.', 'apr.', 'jun.', 'jul.', 'aug.', 'sep.', 'oct.', 'nov.', 'dec.'
     ]);
+
+    const PAUSE_BOUNDARY_SECONDS = 1.25;
+    const SEGMENT_WORD_TARGET = 24;
+    const HARD_WORD_LIMIT = 36;
+
+    const appendSentence = words => {
+        if (words.length === 0) return;
+        sentences.push({
+            id: sentenceId,
+            text: joinTranscriptWords(words),
+            start: words[0].start || 0.0,
+            end: words[words.length - 1].end || 0.0,
+            words: words.map(word => ({
+                word: (word.word || '').trim(),
+                start: word.start || 0.0,
+                end: word.end || 0.0
+            }))
+        });
+        sentenceId += 1;
+    };
     
-    for (const w of allWords) {
+    for (const wrappedWord of allWords) {
+        const w = wrappedWord.word;
+        if (currentWords.length > 0) {
+            const previousWord = currentWords[currentWords.length - 1];
+            const gap = Number(w.start || 0) - Number(previousWord.end || 0);
+            if (gap >= PAUSE_BOUNDARY_SECONDS) {
+                appendSentence(currentWords);
+                currentWords = [];
+            }
+        }
+
         currentWords.push(w);
         const wordText = (w.word || '').trim();
         
@@ -2045,37 +2094,18 @@ function splitTranscriptIntoSentences(transcriptData) {
             }
         }
         
-        if (isSentenceEnd) {
-            const sentenceText = currentWords.map(cw => cw.word || '').join('').trim();
-            sentences.push({
-                id: sentenceId,
-                text: sentenceText,
-                start: currentWords[0].start || 0.0,
-                end: currentWords[currentWords.length - 1].end || 0.0,
-                words: currentWords.map(cw => ({
-                    word: (cw.word || '').trim(),
-                    start: cw.start || 0.0,
-                    end: cw.end || 0.0
-                }))
-            });
-            sentenceId += 1;
+        const fallbackBoundary = (
+            wrappedWord.isSegmentEnd && currentWords.length >= SEGMENT_WORD_TARGET
+        ) || currentWords.length >= HARD_WORD_LIMIT;
+
+        if (isSentenceEnd || fallbackBoundary) {
+            appendSentence(currentWords);
             currentWords = [];
         }
     }
     
     if (currentWords.length > 0) {
-        const sentenceText = currentWords.map(cw => cw.word || '').join('').trim();
-        sentences.push({
-            id: sentenceId,
-            text: sentenceText,
-            start: currentWords[0].start || 0.0,
-            end: currentWords[currentWords.length - 1].end || 0.0,
-            words: currentWords.map(cw => ({
-                word: (cw.word || '').trim(),
-                start: cw.start || 0.0,
-                end: cw.end || 0.0
-            }))
-        });
+        appendSentence(currentWords);
     }
     
     return sentences;
