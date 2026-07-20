@@ -9,6 +9,7 @@ let currentSessionIndex = 0;
 let deletedSentences = [];
 let deletedWords = [];
 let templateCatalog = {};
+const activeSessionGenerations = new Set();
 
 // DOM Elements
 const activeFileDisplay = document.getElementById('active-file-display');
@@ -990,23 +991,32 @@ function renderKeypointsList() {
         // Bind visuals template select dropdown
         const templateSelect = card.querySelector(`#template-select-${index}`);
         templateSelect.value = session.visuals?.template_name || 'Face Only';
-        templateSelect.addEventListener('change', (e) => {
+        templateSelect.addEventListener('change', async (e) => {
             if (!session.visuals) {
                 session.visuals = { template_name: 'Face Only', why_chosen: '', graphics_required: false, content: { title: '', items: [], details: [] } };
             }
-            session.visuals.template_name = e.target.value;
-            card.querySelector(`#visual-template-badge-${index}`).textContent = e.target.value;
-            
+            const requestedTemplate = e.target.value;
+            const previousTemplate = session.visuals.template_name || 'Face Only';
+            const templateBadge = card.querySelector(`#visual-template-badge-${index}`);
             const graphicsCheck = card.querySelector(`#graphics-required-check-${index}`);
-            if (e.target.value === 'Face Only') {
-                session.visuals.graphics_required = false;
-                graphicsCheck.checked = false;
-            } else {
+
+            // Manual-only templates do not have catalog rules for AI regeneration.
+            if (requestedTemplate === 'Name aston' || requestedTemplate === 'Custom Template') {
+                session.visuals.template_name = requestedTemplate;
                 session.visuals.graphics_required = true;
+                templateBadge.textContent = requestedTemplate;
                 graphicsCheck.checked = true;
+                toggleSlideTextVisibility(index, requestedTemplate);
+                markDirty();
+                return;
             }
-            
-            toggleSlideTextVisibility(index, e.target.value);
+
+            // Show the pending selection, but keep session state unchanged until
+            // the locked-template regeneration succeeds.
+            templateSelect.disabled = true;
+            templateBadge.textContent = `${requestedTemplate} (regenerating...)`;
+            graphicsCheck.checked = requestedTemplate !== 'Face Only';
+            toggleSlideTextVisibility(index, requestedTemplate);
             
             // Recalculate heights after visibility updates
             setTimeout(() => {
@@ -1016,13 +1026,19 @@ function renderKeypointsList() {
                     ta.style.height = ta.scrollHeight + 'px';
                 });
             }, 0);
-            
-            markDirty();
 
-            // Trigger automatic regeneration for this session using the new template
-            if (e.target.value !== 'Name aston' && e.target.value !== 'Custom Template') {
-                runSingleSessionGeneration(index, "Regenerate visual content details specifically conforming to the newly chosen template: " + e.target.value);
+            const succeeded = await runSingleSessionGeneration(index, '', {
+                mode: 'template_change',
+                requestedTemplate: requestedTemplate
+            });
+
+            if (!succeeded) {
+                templateSelect.value = previousTemplate;
+                templateBadge.textContent = previousTemplate;
+                graphicsCheck.checked = Boolean(session.visuals.graphics_required);
+                toggleSlideTextVisibility(index, previousTemplate);
             }
+            templateSelect.disabled = false;
         });
 
         // Bind graphics required checkbox
@@ -1488,11 +1504,12 @@ async function runAllKeypointsGeneration() {
 }
 
 // Single Session Generation (invoked by clicking Per-Session "Refine/Generate")
-async function runSingleSessionGeneration(sessionIdx, feedback) {
+async function runSingleSessionGeneration(sessionIdx, feedback, options = {}) {
     const session = sessions[sessionIdx];
-    if (session && session.visuals && (session.visuals.template_name === 'Name aston' || session.visuals.template_name === 'Custom Template')) {
-        alert(`AI generation/refinement is not available for the '${session.visuals.template_name}' template. Please edit the text directly.`);
-        return;
+    const targetTemplate = options.requestedTemplate || session?.visuals?.template_name;
+    if (targetTemplate === 'Name aston' || targetTemplate === 'Custom Template') {
+        alert(`AI generation/refinement is not available for the '${targetTemplate}' template. Please edit the text directly.`);
+        return false;
     }
 
     const cardEl = document.getElementById(`keypoint-card-${sessionIdx}`);
@@ -1500,9 +1517,8 @@ async function runSingleSessionGeneration(sessionIdx, feedback) {
     const overlayText = document.getElementById(`overlay-text-${sessionIdx}`);
     
     if (overlay && overlayText) {
-        if (feedback && feedback.startsWith("Regenerate visual content details specifically conforming to the newly chosen template: ")) {
-            const tempName = feedback.replace("Regenerate visual content details specifically conforming to the newly chosen template: ", "");
-            overlayText.textContent = `Regenerating for ${tempName}...`;
+        if (options.mode === 'template_change') {
+            overlayText.textContent = `Regenerating for ${options.requestedTemplate}...`;
         } else {
             overlayText.textContent = feedback ? 'Refining Highlights...' : 'Generating Keypoints...';
         }
@@ -1510,16 +1526,18 @@ async function runSingleSessionGeneration(sessionIdx, feedback) {
     }
     
     try {
-        await executeSessionGeneration(sessionIdx, feedback);
+        await executeSessionGeneration(sessionIdx, feedback, options);
         
         // Clear refinement feedback textbox on success
         const feedbackInput = cardEl.querySelector(`#feedback-${sessionIdx}`);
         if (feedbackInput) {
             feedbackInput.value = '';
         }
+        return true;
     } catch (err) {
         console.error(err);
         alert(`Failed to generate highlights for Session ${sessionIdx + 1}: ` + err.message);
+        return false;
     } finally {
         if (overlay) {
             overlay.classList.add('hidden');
@@ -1528,12 +1546,16 @@ async function runSingleSessionGeneration(sessionIdx, feedback) {
 }
 
 // Core API caller for single session keypoint generation
-async function executeSessionGeneration(sessionIdx, feedback = '') {
+async function executeSessionGeneration(sessionIdx, feedback = '', options = {}) {
     const session = sessions[sessionIdx];
-    if (session && session.visuals && (session.visuals.template_name === 'Name aston' || session.visuals.template_name === 'Custom Template')) {
+    const targetTemplate = options.requestedTemplate || session?.visuals?.template_name;
+    if (targetTemplate === 'Name aston' || targetTemplate === 'Custom Template') {
         return;
     }
-    
+    if (activeSessionGenerations.has(sessionIdx)) {
+        throw new Error('Generation is already in progress for this chunk.');
+    }
+
     // Collect sentence details mapping to this session
     const sessionSentences = session.sentence_indices.map(id => {
         const s = sentences.find(sent => sent.id === id);
@@ -1544,6 +1566,7 @@ async function executeSessionGeneration(sessionIdx, feedback = '') {
     if (sessionSentences.length === 0) {
         throw new Error('This chunk no longer contains any transcript sentences. Return to Smart Chunker and rebuild it.');
     }
+    activeSessionGenerations.add(sessionIdx);
 
     const keyOverride = apiKeyInput.value.trim();
     const model = modelSelect.value;
@@ -1553,9 +1576,8 @@ async function executeSessionGeneration(sessionIdx, feedback = '') {
     const overlayText = document.getElementById(`overlay-text-${sessionIdx}`);
     
     if (overlay && overlayText) {
-        if (feedback && feedback.startsWith("Regenerate visual content details specifically conforming to the newly chosen template: ")) {
-            const tempName = feedback.replace("Regenerate visual content details specifically conforming to the newly chosen template: ", "");
-            overlayText.textContent = `Regenerating for ${tempName}...`;
+        if (options.mode === 'template_change') {
+            overlayText.textContent = `Regenerating for ${options.requestedTemplate}...`;
         } else {
             overlayText.textContent = feedback ? 'Refining Highlights...' : 'Generating Keypoints...';
         }
@@ -1568,8 +1590,12 @@ async function executeSessionGeneration(sessionIdx, feedback = '') {
             model: model,
             feedback: feedback
         };
-        
-        if (feedback) {
+
+        if (options.mode === 'template_change') {
+            payload.generation_mode = 'template_change';
+            payload.requested_template = options.requestedTemplate;
+            payload.existing_visuals = session.visuals;
+        } else if (feedback) {
             payload.existing_heading = session.heading;
             payload.existing_subheadings = session.subheadings;
             payload.existing_text_content = session.text_content;
@@ -1590,17 +1616,24 @@ async function executeSessionGeneration(sessionIdx, feedback = '') {
             throw new Error(data.error || 'AI model call failed');
         }
 
-        // Set returned heading, subheadings, text_content, and visuals
-        session.heading = data.heading || '';
-        session.subheadings = data.subheadings || [];
-        session.text_content = data.text_content || '';
+        const preservedAiSuggestion = session.visuals?.ai_suggested_template
+            || session.visuals?.template_name
+            || 'Face Only';
+
+        if (options.mode !== 'template_change') {
+            session.heading = data.heading || '';
+            session.subheadings = data.subheadings || [];
+            session.text_content = data.text_content || '';
+        }
         session.visuals = data.visuals || {
             template_name: 'Face Only',
             why_chosen: 'No visual template could be determined',
             graphics_required: false,
             content: { title: '', items: [], details: [] }
         };
-        session.visuals.ai_suggested_template = data.visuals?.template_name || 'Face Only';
+        session.visuals.ai_suggested_template = options.mode === 'template_change'
+            ? preservedAiSuggestion
+            : (data.visuals?.template_name || 'Face Only');
         
         // Normalize visuals items/details schema
         if (session.visuals && session.visuals.content) {
@@ -1700,6 +1733,7 @@ async function executeSessionGeneration(sessionIdx, feedback = '') {
         }, 0);
         
     } finally {
+        activeSessionGenerations.delete(sessionIdx);
         if (overlay) {
             overlay.classList.add('hidden');
         }

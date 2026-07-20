@@ -1,9 +1,14 @@
 import importlib
 import json
+import os
 import sys
 import unittest
 from unittest import mock
 
+
+PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+if PROJECT_ROOT not in sys.path:
+    sys.path.insert(0, PROJECT_ROOT)
 
 with mock.patch.dict(sys.modules, {'faster_whisper': None}):
     app_module = importlib.import_module('app')
@@ -93,6 +98,81 @@ class AppIntegrationTests(unittest.TestCase):
             list(app_module.load_template_catalog().keys()),
             captured['response_schema']['properties']['visuals']['properties']['template_name']['enum']
         )
+
+    def test_template_change_uses_only_selected_template_and_returns_visuals(self):
+        captured = {}
+        requested_template = 'Template No 16 Split Screen'
+        model_response = {
+            'visuals': {
+                'template_name': requested_template,
+                'why_chosen': 'The unchanged chunk presents a short sequence.',
+                'graphics_required': True,
+                'content': {
+                    'title': '',
+                    'heading_timestamp': 1.2,
+                    'items': [],
+                    'details': []
+                }
+            }
+        }
+
+        def fake_openrouter(**kwargs):
+            captured.update(kwargs)
+            return json.dumps(model_response)
+
+        sentences = [{
+            'id': 0,
+            'text': 'First identify the issue and then apply the solution.',
+            'start': 1.2,
+            'end': 5.0,
+            'words': [
+                {'word': ' First', 'start': 1.2, 'end': 1.5},
+                {'word': ' identify', 'start': 1.6, 'end': 2.0}
+            ]
+        }]
+
+        with mock.patch.object(app_module, 'call_openrouter_api', side_effect=fake_openrouter):
+            response = self.client.post(
+                '/api/generate-session-keypoints',
+                json={
+                    'sentences': sentences,
+                    'generation_mode': 'template_change',
+                    'requested_template': requested_template,
+                    'existing_visuals': {
+                        'template_name': 'Template 2',
+                        'why_chosen': 'Previous selection',
+                        'graphics_required': True,
+                        'content': {'title': 'Old title', 'items': [], 'details': []}
+                    }
+                },
+                headers={'X-OpenRouter-Key': 'test-key'}
+            )
+
+        payload = response.get_json()
+        self.assertEqual(200, response.status_code)
+        self.assertEqual({'visuals'}, set(payload.keys()))
+        self.assertEqual(requested_template, payload['visuals']['template_name'])
+        self.assertEqual(
+            [requested_template],
+            captured['response_schema']['properties']['visuals']['properties']['template_name']['enum']
+        )
+        self.assertIn('Split-screen layout', captured['prompt'])
+        self.assertNotIn('Detailed concept breakdowns', captured['prompt'])
+        self.assertNotIn('Template No 16 OG', captured['prompt'])
+
+    def test_template_change_rejects_unknown_template(self):
+        response = self.client.post(
+            '/api/generate-session-keypoints',
+            json={
+                'sentences': [{'id': 0, 'text': 'A short chunk.', 'start': 0, 'end': 1}],
+                'generation_mode': 'template_change',
+                'requested_template': 'Template 16'
+            },
+            headers={'X-OpenRouter-Key': 'test-key'}
+        )
+
+        self.assertEqual(400, response.status_code)
+        self.assertIn('Unknown requested template', response.get_json()['error'])
 
     def test_chunking_uses_luna_without_network_access(self):
         captured = {}

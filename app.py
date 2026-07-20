@@ -7,6 +7,7 @@ import shutil
 import ctypes
 import string
 import re
+from functools import lru_cache
 from flask import Flask, render_template, request, jsonify, send_from_directory
 from werkzeug.utils import secure_filename
 from dotenv import load_dotenv
@@ -77,6 +78,7 @@ def load_prompt_template(filename):
     with open(path, 'r', encoding='utf-8') as f:
         return f.read()
 
+@lru_cache(maxsize=1)
 def load_template_document():
     """Load global visual guidance and the canonical template catalog."""
     with open(TEMPLATE_CATALOG_FILE, 'r', encoding='utf-8') as f:
@@ -297,8 +299,8 @@ class VisualsDetail(BaseModel):
 class VisualsContent(BaseModel):
     title: str
     heading_timestamp: float = 0.0
-    items: Optional[List[VisualsItem]] = []
-    details: Optional[List[VisualsDetail]] = []
+    items: Optional[List[VisualsItem]] = Field(default_factory=list)
+    details: Optional[List[VisualsDetail]] = Field(default_factory=list)
 
 class VisualsData(BaseModel):
     template_name: str
@@ -1042,10 +1044,66 @@ def validate_visual_grounding(session_text, visuals, text_content=''):
                 f"Visual text is not sufficiently grounded in the chunk; unsupported terms: {', '.join(unsupported[:8])}"
             )
 
+def build_visuals_response_schema(template_names, session_start, session_end):
+    """Build the shared visual payload schema, optionally locked to one template."""
+    return {
+        "type": "object",
+        "properties": {
+            "template_name": {
+                "type": "string",
+                "enum": list(template_names)
+            },
+            "why_chosen": {"type": "string"},
+            "graphics_required": {"type": "boolean"},
+            "content": {
+                "type": "object",
+                "properties": {
+                    "title": {"type": "string"},
+                    "heading_timestamp": {
+                        "type": "number",
+                        "minimum": session_start,
+                        "maximum": session_end
+                    },
+                    "items": {
+                        "type": "array",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "value": {"type": "string"},
+                                "timestamp": {"type": "number"}
+                            },
+                            "required": ["value", "timestamp"],
+                            "additionalProperties": False
+                        }
+                    },
+                    "details": {
+                        "type": "array",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "label": {"type": "string"},
+                                "value": {"type": "string"},
+                                "timestamp": {"type": "number"}
+                            },
+                            "required": ["label", "value", "timestamp"],
+                            "additionalProperties": False
+                        }
+                    }
+                },
+                "required": ["title", "heading_timestamp", "items", "details"],
+                "additionalProperties": False
+            }
+        },
+        "required": ["template_name", "why_chosen", "graphics_required", "content"],
+        "additionalProperties": False
+    }
+
 @app.route('/api/generate-session-keypoints', methods=['POST'])
 def generate_session_keypoints():
     data = request.json or {}
     sentences = data.get('sentences', [])
+    generation_mode = data.get('generation_mode', 'full')
+    requested_template = data.get('requested_template', '').strip()
     feedback = data.get('feedback', '').strip()
     existing_heading = data.get('existing_heading', '')
     existing_subheadings = data.get('existing_subheadings', [])
@@ -1089,15 +1147,37 @@ def generate_session_keypoints():
     # templates.json is the canonical template-selection guide.
     try:
         template_guidelines, template_catalog = load_template_document()
-        visuals_guide_content = json.dumps({
-            'global_and_reinforced_guidelines': template_guidelines,
-            'templates': template_catalog
-        }, ensure_ascii=False, indent=2)
+        visuals_guide_content = ''
+        if generation_mode != 'template_change':
+            visuals_guide_content = json.dumps({
+                'global_and_reinforced_guidelines': template_guidelines,
+                'templates': template_catalog
+            }, ensure_ascii=False, indent=2)
     except Exception as e:
         return jsonify({'error': f'Failed to load templates.json: {str(e)}'}), 500
+
+    if generation_mode == 'template_change' and requested_template not in template_catalog:
+        return jsonify({'error': f"Unknown requested template: {requested_template}"}), 400
         
     # Design prompt
-    if feedback:
+    if generation_mode == 'template_change':
+        selected_template_json = json.dumps(
+            {requested_template: template_catalog[requested_template]},
+            ensure_ascii=False,
+            indent=2
+        )
+        existing_visuals_str = json.dumps(existing_visuals or {}, ensure_ascii=False, indent=2)
+        prompt_tmpl = load_prompt_template('keypoints_template_regeneration.md')
+        prompt = prompt_tmpl.format(
+            requested_template=requested_template,
+            selected_template_json=selected_template_json,
+            session_text=session_text,
+            timestamped_transcript=timestamped_transcript,
+            existing_visuals_str=existing_visuals_str,
+            session_start=session_start,
+            session_end=session_end
+        )
+    elif feedback:
         existing_data = {
             "heading": existing_heading,
             "subheadings": existing_subheadings,
@@ -1128,7 +1208,21 @@ def generate_session_keypoints():
             visuals_guide_content=visuals_guide_content
         )
 
-    schema = {
+    visuals_schema = build_visuals_response_schema(
+        [requested_template] if generation_mode == 'template_change' else template_catalog.keys(),
+        session_start,
+        session_end
+    )
+
+    if generation_mode == 'template_change':
+        schema = {
+            "type": "object",
+            "properties": {"visuals": visuals_schema},
+            "required": ["visuals"],
+            "additionalProperties": False
+        }
+    else:
+        schema = {
         "type": "object",
         "properties": {
             "heading": {"type": "string"},
@@ -1137,61 +1231,11 @@ def generate_session_keypoints():
                 "items": {"type": "string"}
             },
             "text_content": {"type": "string"},
-            "visuals": {
-                "type": "object",
-                "properties": {
-                    "template_name": {
-                        "type": "string",
-                        "enum": list(template_catalog.keys())
-                    },
-                    "why_chosen": {"type": "string"},
-                    "graphics_required": {"type": "boolean"},
-                    "content": {
-                        "type": "object",
-                        "properties": {
-                            "title": {"type": "string"},
-                            "heading_timestamp": {
-                                "type": "number",
-                                "minimum": session_start,
-                                "maximum": session_end
-                            },
-                            "items": {
-                                "type": "array",
-                                "items": {
-                                    "type": "object",
-                                    "properties": {
-                                        "value": {"type": "string"},
-                                        "timestamp": {"type": "number"}
-                                    },
-                                    "required": ["value", "timestamp"],
-                                    "additionalProperties": False
-                                }
-                            },
-                            "details": {
-                                "type": "array",
-                                "items": {
-                                    "type": "object",
-                                    "properties": {
-                                        "label": {"type": "string"},
-                                        "value": {"type": "string"},
-                                        "timestamp": {"type": "number"}
-                                    },
-                                    "required": ["label", "value", "timestamp"],
-                                    "additionalProperties": False
-                                }
-                            }
-                        },
-                        "required": ["title", "heading_timestamp", "items", "details"],
-                        "additionalProperties": False
-                    }
-                },
-                "required": ["template_name", "why_chosen", "graphics_required", "content"],
-                "additionalProperties": False
-            }
+            "visuals": visuals_schema
         },
         "required": ["heading", "subheadings", "text_content", "visuals"],
         "additionalProperties": False
-    }
+        }
     
     max_retries = 3
     last_error = None
@@ -1212,6 +1256,32 @@ def generate_session_keypoints():
             )
             
             result = clean_json_response(text_response)
+
+            if generation_mode == 'template_change':
+                validated_visuals = VisualsData.model_validate(result.get('visuals', {}))
+                visuals = validated_visuals.model_dump()
+                if visuals.get('template_name') != requested_template:
+                    raise ValueError(
+                        f"Template regeneration returned '{visuals.get('template_name')}' "
+                        f"instead of locked template '{requested_template}'."
+                    )
+                visuals = normalize_generated_visuals(
+                    visuals,
+                    sentences,
+                    session_start,
+                    session_end
+                )
+                if requested_template == 'Face Only':
+                    visuals['graphics_required'] = False
+                    visuals['content'] = {
+                        'title': '',
+                        'heading_timestamp': session_start,
+                        'items': [],
+                        'details': []
+                    }
+                else:
+                    validate_visual_grounding(session_text, visuals)
+                return jsonify({'visuals': visuals}), 200
             
             # Validate response with Pydantic schema
             validated_data = SessionKeypoints.model_validate(result)
