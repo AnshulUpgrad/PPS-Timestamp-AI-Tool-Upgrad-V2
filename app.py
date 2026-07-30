@@ -1,4 +1,5 @@
 import os
+import io
 import sys
 import json
 import platform
@@ -53,7 +54,7 @@ os.makedirs(TRANSCRIPTIONS_FOLDER, exist_ok=True)
 
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 app.config['TRANSCRIPTIONS_FOLDER'] = TRANSCRIPTIONS_FOLDER
-app.config['MAX_CONTENT_LENGTH'] = 500 * 1024 * 1024  # 500MB max request size
+app.config['MAX_CONTENT_LENGTH'] = int(os.getenv('MAX_UPLOAD_MB', '250')) * 1024 * 1024
 
 # Global error handlers — always return JSON so the frontend never gets HTML error pages
 @app.errorhandler(413)
@@ -337,6 +338,94 @@ def save_config(config):
     except Exception:
         return False
 
+def human_bytes(n):
+    for unit in ('B', 'KB', 'MB', 'GB'):
+        if n < 1024 or unit == 'GB':
+            return f"{n:.0f} {unit}" if unit == 'B' else f"{round(n, 2)} {unit}"
+        n /= 1024.0
+
+
+class StreamedMultipartBody:
+    """A multipart body that reads its file part lazily off disk.
+
+    urllib/http.client will call read() in blocks when the request body is a
+    file-like object with an explicit Content-Length, so the payload never has
+    to exist in memory as a single bytes object.
+    """
+
+    def __init__(self, preamble, file_obj, epilogue):
+        self._parts = [io.BytesIO(preamble), file_obj, io.BytesIO(epilogue)]
+        self._index = 0
+
+    def read(self, size=-1):
+        while self._index < len(self._parts):
+            chunk = self._parts[self._index].read(size)
+            if chunk:
+                return chunk
+            self._index += 1
+        return b''
+
+
+def resolve_in_folder(folder, filename):
+    """Resolve `filename` inside `folder`, rejecting anything that escapes it.
+
+    Returns the absolute path, or None if the name is empty or would traverse
+    outside `folder`. Every delete path goes through this.
+    """
+    safe_name = os.path.basename(filename or '').strip()
+    if not safe_name or safe_name in ('.', '..'):
+        return None
+
+    root = os.path.realpath(folder)
+    resolved = os.path.realpath(os.path.join(root, safe_name))
+    try:
+        if os.path.commonpath([root, resolved]) != root:
+            return None
+    except ValueError:
+        # Different drives on Windows — definitely outside the folder.
+        return None
+    return resolved
+
+
+def transcript_sidecars(media_name):
+    """Every transcriptions/ file that belongs to a given media file."""
+    paths = []
+    for suffix in ('.json', '_chunks.json', '_deleted_sentences.json'):
+        sidecar = resolve_in_folder(app.config['TRANSCRIPTIONS_FOLDER'], f"{media_name}{suffix}")
+        if sidecar:
+            paths.append(sidecar)
+    return paths
+
+
+def discard_source_media(video_path, output_path):
+    """Delete the source file once its audio has been extracted.
+
+    Only ever touches files inside UPLOAD_FOLDER, so a locally-browsed source
+    (Windows native file dialog) is never removed from the user's own disk.
+    Returns the number of bytes freed, or 0 if nothing was deleted.
+    """
+    if os.getenv('KEEP_SOURCE_MEDIA', 'false').lower() == 'true':
+        return 0
+
+    source = resolve_in_folder(app.config['UPLOAD_FOLDER'], os.path.basename(video_path))
+    if not source or not os.path.isfile(source):
+        return 0
+    # video_path must actually *be* the file inside uploads/, not merely share its name.
+    if source != os.path.realpath(video_path):
+        return 0
+    if source == os.path.realpath(output_path):
+        return 0
+
+    try:
+        freed = os.path.getsize(source)
+        os.remove(source)
+        print(f"Removed source media after extraction: {source} ({freed} bytes)")
+        return freed
+    except OSError as e:
+        print(f"Could not remove source media {source}: {e}")
+        return 0
+
+
 def get_ffmpeg_command(custom_path=None):
     if custom_path and os.path.exists(custom_path) and os.path.isfile(custom_path):
         return custom_path
@@ -509,6 +598,9 @@ def extract_audio():
     if not os.path.exists(video_path) or not os.path.isfile(video_path):
         return jsonify({'error': f"Video file not found at path: {video_path}"}), 400
 
+    # Stat the source before extraction — it may be deleted below.
+    original_size_bytes = os.path.getsize(video_path)
+
     video_name = os.path.basename(video_path)
     base_name, ext_raw = os.path.splitext(video_name)
     ext = ext_raw.lower().lstrip('.')
@@ -534,19 +626,22 @@ def extract_audio():
             counter += 1
             
         output_path = os.path.join(app.config['UPLOAD_FOLDER'], out_filename)
-        cmd = [ffmpeg_cmd, '-y', '-i', video_path, '-vn', '-c:a', 'copy', output_path]
-        
+        cmd = [ffmpeg_cmd, '-y', '-nostats', '-loglevel', 'warning',
+               '-i', video_path, '-vn', '-c:a', 'copy', output_path]
+
         try:
             # Run command natively
             result = subprocess.run(cmd, capture_output=True, text=True, check=True)
             size_mb = os.path.getsize(output_path) / (1024 * 1024)
+            source_freed = discard_source_media(video_path, output_path)
             return jsonify({
                 'message': 'Audio successfully extracted (Stream Copy)',
                 'filename': out_filename,
-                'original_size_bytes': os.path.getsize(video_path),
+                'original_size_bytes': original_size_bytes,
                 'audio_size_bytes': os.path.getsize(output_path),
                 'size_mb': round(size_mb, 2),
                 'mode': 'Stream Copy',
+                'source_freed_bytes': source_freed,
                 'logs': result.stderr
             }), 200
         except subprocess.CalledProcessError as e:
@@ -559,18 +654,21 @@ def extract_audio():
                 counter += 1
                 
             output_path = os.path.join(app.config['UPLOAD_FOLDER'], out_filename)
-            cmd_fallback = [ffmpeg_cmd, '-y', '-i', video_path, '-vn', '-c:a', 'libmp3lame', '-q:a', '4', output_path]
-            
+            cmd_fallback = [ffmpeg_cmd, '-y', '-nostats', '-loglevel', 'warning',
+                            '-i', video_path, '-vn', '-c:a', 'libmp3lame', '-q:a', '4', output_path]
+
             try:
                 result_fb = subprocess.run(cmd_fallback, capture_output=True, text=True, check=True)
                 size_mb = os.path.getsize(output_path) / (1024 * 1024)
+                source_freed = discard_source_media(video_path, output_path)
                 return jsonify({
                     'message': 'Audio successfully extracted (MP3 Transcode Fallback)',
                     'filename': out_filename,
-                    'original_size_bytes': os.path.getsize(video_path),
+                    'original_size_bytes': original_size_bytes,
                     'audio_size_bytes': os.path.getsize(output_path),
                     'size_mb': round(size_mb, 2),
                     'mode': 'Transcode Fallback (MP3)',
+                    'source_freed_bytes': source_freed,
                     'logs': f"Stream copy failed:\n{e.stderr}\n\nRunning Transcode:\n{result_fb.stderr}"
                 }), 200
             except subprocess.CalledProcessError as e_transcode:
@@ -587,18 +685,21 @@ def extract_audio():
             counter += 1
             
         output_path = os.path.join(app.config['UPLOAD_FOLDER'], out_filename)
-        cmd = [ffmpeg_cmd, '-y', '-i', video_path, '-vn', '-c:a', 'libmp3lame', '-q:a', '4', output_path]
-        
+        cmd = [ffmpeg_cmd, '-y', '-nostats', '-loglevel', 'warning',
+               '-i', video_path, '-vn', '-c:a', 'libmp3lame', '-q:a', '4', output_path]
+
         try:
             result = subprocess.run(cmd, capture_output=True, text=True, check=True)
             size_mb = os.path.getsize(output_path) / (1024 * 1024)
+            source_freed = discard_source_media(video_path, output_path)
             return jsonify({
                 'message': 'Audio successfully transcoded to MP3',
                 'filename': out_filename,
-                'original_size_bytes': os.path.getsize(video_path),
+                'original_size_bytes': original_size_bytes,
                 'audio_size_bytes': os.path.getsize(output_path),
                 'size_mb': round(size_mb, 2),
                 'mode': 'MP3 Transcode',
+                'source_freed_bytes': source_freed,
                 'logs': result.stderr
             }), 200
         except subprocess.CalledProcessError as e:
@@ -631,6 +732,72 @@ def list_files():
         return jsonify(files), 200
     except Exception as e:
         return jsonify({'error': str(e)}), 500
+
+@app.route('/api/files/<path:filename>', methods=['DELETE'])
+def delete_media_file(filename):
+    """Delete one media file and every transcript artifact derived from it."""
+    media_path = resolve_in_folder(app.config['UPLOAD_FOLDER'], filename)
+    if not media_path:
+        return jsonify({'error': 'Invalid filename.'}), 400
+
+    media_name = os.path.basename(media_path)
+    targets = [media_path] + transcript_sidecars(media_name)
+
+    freed = 0
+    removed = []
+    errors = []
+    for path in targets:
+        if not os.path.isfile(path):
+            continue
+        try:
+            size = os.path.getsize(path)
+            os.remove(path)
+            freed += size
+            removed.append(os.path.basename(path))
+        except OSError as e:
+            errors.append(f"{os.path.basename(path)}: {e}")
+
+    if errors:
+        return jsonify({
+            'error': 'Some files could not be deleted.',
+            'details': errors,
+            'removed': removed,
+            'freed_bytes': freed
+        }), 500
+
+    if not removed:
+        return jsonify({'error': f"Nothing found on disk for: {media_name}"}), 404
+
+    return jsonify({
+        'message': f"Deleted {len(removed)} file(s) for {media_name}.",
+        'removed': removed,
+        'freed_bytes': freed,
+        'freed': human_bytes(freed)
+    }), 200
+
+
+@app.route('/api/storage', methods=['GET'])
+def storage_usage():
+    """Bytes currently held in uploads/ and transcriptions/."""
+    totals = {}
+    for label, folder in (('uploads', app.config['UPLOAD_FOLDER']),
+                          ('transcriptions', app.config['TRANSCRIPTIONS_FOLDER'])):
+        total = 0
+        count = 0
+        for name in os.listdir(folder):
+            path = os.path.join(folder, name)
+            if os.path.isfile(path):
+                total += os.path.getsize(path)
+                count += 1
+        totals[label] = {'bytes': total, 'files': count}
+
+    grand = sum(v['bytes'] for v in totals.values())
+    return jsonify({
+        'folders': totals,
+        'total_bytes': grand,
+        'total': human_bytes(grand)
+    }), 200
+
 
 @app.route('/uploads/<path:filename>')
 def download_file(filename):
@@ -687,7 +854,9 @@ def transcribe_audio():
             
             print(f"Calling remote WhisperTranscriber.transcribe method with model_size={model_size}...")
             transcript_data = server.transcribe.remote(audio_bytes=file_bytes, model_name=model_size, language="auto")
-            
+            # Release the audio before serialising the transcript response.
+            del file_bytes
+
             with open(transcript_path, 'w', encoding='utf-8') as f:
                 json.dump(transcript_data, f, ensure_ascii=False, indent=2)
                 
@@ -698,7 +867,9 @@ def transcribe_audio():
             }), 200
         except Exception as e:
             print(f"Modal native SDK transcription failed: {e}")
-            
+            # Drop the SDK attempt's copy before the fallback allocates its own.
+            file_bytes = None
+
             # Fall back to HTTP post if they still have the FastAPI endpoint deployed (using their modal_url)
             if modal_url:
                 try:
@@ -712,30 +883,29 @@ def transcribe_audio():
                     import urllib.request
                     
                     boundary = f"---Boundary-{uuid.uuid4().hex}"
-                    
-                    with open(audio_path, "rb") as f:
-                        file_bytes = f.read()
-                        
-                    parts = [
+
+                    preamble = b"\r\n".join([
                         f"--{boundary}".encode("utf-8"),
                         f'Content-Disposition: form-data; name="file"; filename="{filename}"'.encode("utf-8"),
                         b"Content-Type: application/octet-stream",
                         b"",
-                        file_bytes,
-                        f"--{boundary}--".encode("utf-8")
-                    ]
-                    
-                    body = b"\r\n".join(parts)
-                    
+                        b"",
+                    ])
+                    epilogue = f"\r\n--{boundary}--\r\n".encode("utf-8")
+
+                    audio_size = os.path.getsize(audio_path)
                     headers = {
                         "Content-Type": f"multipart/form-data; boundary={boundary}",
-                        "Content-Length": str(len(body))
+                        "Content-Length": str(len(preamble) + audio_size + len(epilogue))
                     }
-                    
-                    req = urllib.request.Request(target_url, data=body, headers=headers, method="POST")
-                    with urllib.request.urlopen(req, timeout=600) as response:
-                        transcript_data = json.loads(response.read().decode("utf-8"))
-                    
+
+                    # Stream the file straight off disk — never materialise it in RAM.
+                    with open(audio_path, "rb") as f:
+                        body = StreamedMultipartBody(preamble, f, epilogue)
+                        req = urllib.request.Request(target_url, data=body, headers=headers, method="POST")
+                        with urllib.request.urlopen(req, timeout=600) as response:
+                            transcript_data = json.loads(response.read().decode("utf-8"))
+
                     with open(transcript_path, 'w', encoding='utf-8') as f:
                         json.dump(transcript_data, f, ensure_ascii=False, indent=2)
                         

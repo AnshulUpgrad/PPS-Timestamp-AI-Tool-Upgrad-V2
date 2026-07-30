@@ -1265,7 +1265,7 @@ async function runAIChunking() {
             builtSessions.push(...normalizeChunkSessions(data.sessions));
 
             const nextOffset = Math.min(i + BATCH_SIZE, sentencePayload.length);
-            localStorage.setItem(progressKey, JSON.stringify({
+            safeSetItem(progressKey, JSON.stringify({
                 model: model,
                 sentenceCount: sentencePayload.length,
                 nextOffset: nextOffset,
@@ -1275,14 +1275,14 @@ async function runAIChunking() {
             // Make every completed batch immediately usable and recoverable.
             const processedSentences = sentencePayload.slice(0, nextOffset);
             sessions = reconcileSessions(builtSessions, processedSentences);
-            localStorage.setItem('chunks_' + activeFile, JSON.stringify({ sessions: sessions }));
+            safeSetItem('chunks_' + activeFile, JSON.stringify({ sessions: sessions }));
             renderSessions();
             markDirty();
         }
 
         // Reconcile and clean up sessions to guarantee ordering and no duplicates/gaps
         sessions = reconcileSessions(builtSessions, sentencePayload);
-        localStorage.setItem('chunks_' + activeFile, JSON.stringify({ sessions: sessions }));
+        safeSetItem('chunks_' + activeFile, JSON.stringify({ sessions: sessions }));
         localStorage.removeItem(progressKey);
         
         // Re-render
@@ -1307,8 +1307,8 @@ async function saveChunksToServer() {
     btnSaveSessions.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Saving...';
     
     // Save to localStorage as a primary backup (crucial for stateless environments like Vercel)
-    localStorage.setItem('chunks_' + activeFile, JSON.stringify({ sessions: sessions }));
-    localStorage.setItem('deleted_' + activeFile, JSON.stringify({ deleted_sentences: deletedSentences, deleted_words: deletedWords }));
+    safeSetItem('chunks_' + activeFile, JSON.stringify({ sessions: sessions }));
+    safeSetItem('deleted_' + activeFile, JSON.stringify({ deleted_sentences: deletedSentences, deleted_words: deletedWords }));
     
     const payload = {
         sessions: sessions,
@@ -1370,8 +1370,8 @@ async function confirmChunksAndNext() {
     btnConfirmChunks.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Confirming...';
     
     // Save to localStorage as a primary backup (crucial for stateless environments like Vercel)
-    localStorage.setItem('chunks_' + activeFile, JSON.stringify({ sessions: sessions }));
-    localStorage.setItem('deleted_' + activeFile, JSON.stringify({ deleted_sentences: deletedSentences, deleted_words: deletedWords }));
+    safeSetItem('chunks_' + activeFile, JSON.stringify({ sessions: sessions }));
+    safeSetItem('deleted_' + activeFile, JSON.stringify({ deleted_sentences: deletedSentences, deleted_words: deletedWords }));
     
     const payload = {
         sessions: sessions,
@@ -1507,8 +1507,8 @@ function handleImportJSON(e) {
             markDirty();
 
             // Save to localStorage
-            localStorage.setItem('chunks_' + activeFile, JSON.stringify({ sessions: sessions }));
-            localStorage.setItem('deleted_' + activeFile, JSON.stringify({ deleted_sentences: deletedSentences, deleted_words: deletedWords }));
+            safeSetItem('chunks_' + activeFile, JSON.stringify({ sessions: sessions }));
+            safeSetItem('deleted_' + activeFile, JSON.stringify({ deleted_sentences: deletedSentences, deleted_words: deletedWords }));
 
             alert('Checkpoint JSON imported successfully!');
         } catch (err) {

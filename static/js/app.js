@@ -24,6 +24,34 @@ function openMediaCache() {
     });
 }
 
+async function deleteCachedMedia(filename) {
+    if (!filename) return;
+    const db = await openMediaCache();
+    try {
+        await new Promise((resolve, reject) => {
+            const tx = db.transaction(MEDIA_CACHE_STORE, 'readwrite');
+            tx.objectStore(MEDIA_CACHE_STORE).delete(filename);
+            tx.oncomplete = resolve;
+            tx.onerror = () => reject(tx.error);
+        });
+    } finally {
+        db.close();
+    }
+}
+
+function removeFromLocalRegistry(filename) {
+    try {
+        const registry = JSON.parse(localStorage.getItem('processed_files_registry') || '[]');
+        localStorage.setItem(
+            'processed_files_registry',
+            JSON.stringify(registry.filter(f => f.name !== filename))
+        );
+        localStorage.removeItem('transcript_' + filename);
+    } catch (e) {
+        console.error('Failed to prune local registry:', e);
+    }
+}
+
 async function cacheMediaFile(filename, file) {
     if (!filename || !file) return;
     const db = await openMediaCache();
@@ -540,8 +568,8 @@ async function runNativeExtraction() {
         
         const transcribeData = await transcribeResp.json();
         
-        // Cache transcript locally
-        localStorage.setItem('transcript_' + data.filename, JSON.stringify(transcribeData.transcript));
+        // Cache transcript locally — best-effort, never fatal to the pipeline
+        cacheLocally('transcript_' + data.filename, JSON.stringify(transcribeData.transcript), writeLog);
         if (fileToUpload) {
             await cacheMediaFile(data.filename, fileToUpload);
         }
@@ -665,6 +693,15 @@ async function loadAudioLibrary() {
         });
         
         fileCountBadge.textContent = `${files.length} Files`;
+        try {
+            const storageResp = await fetch('/api/storage');
+            if (storageResp.ok) {
+                const storage = await storageResp.json();
+                fileCountBadge.textContent = `${files.length} Files · ${storage.total} on server`;
+            }
+        } catch (e) {
+            console.warn('Could not read server storage usage:', e);
+        }
         
         if (files.length === 0) {
             filesEmpty.classList.remove('hidden');
@@ -764,6 +801,9 @@ async function loadAudioLibrary() {
                         <a href="${file.url}" download class="btn-icon" title="Download Audio" ${file.is_local_only ? 'style="display:none;"' : ''}>
                             <i class="fa-solid fa-download"></i>
                         </a>
+                        <button class="btn-icon delete-file-btn" data-filename="${escapeHtml(file.name)}" data-local-only="${file.is_local_only ? '1' : '0'}" title="Delete from server" style="color: #ef4444;">
+                            <i class="fa-solid fa-trash"></i>
+                        </button>
                     </div>
                 </div>
                 ${audioPlayerHtml}
@@ -771,6 +811,43 @@ async function loadAudioLibrary() {
             `;
             
             filesList.appendChild(item);
+        });
+
+        // Delete buttons live outside .transcript-section, so wire them separately
+        document.querySelectorAll('.delete-file-btn').forEach(btn => {
+            btn.addEventListener('click', async () => {
+                const filename = btn.getAttribute('data-filename');
+                const isLocalOnly = btn.getAttribute('data-local-only') === '1';
+
+                const warning = isLocalOnly
+                    ? `Remove "${filename}" from this browser?\n\nIts server files are already gone. This clears the cached transcript and media.`
+                    : `Delete "${filename}" from the server?\n\nThis removes the audio file plus its transcript, chunks, and sentence edits. This cannot be undone.`;
+                if (!confirm(warning)) return;
+
+                btn.disabled = true;
+                btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i>';
+
+                try {
+                    if (!isLocalOnly) {
+                        const resp = await fetch(`/api/files/${encodeURIComponent(filename)}`, { method: 'DELETE' });
+                        const data = await resp.json().catch(() => ({}));
+                        if (!resp.ok) throw new Error(data.error || `Delete failed (status ${resp.status}).`);
+                        writeLog(`Deleted ${filename} from server — freed ${data.freed} (${data.removed.length} file(s)).`);
+                    } else {
+                        writeLog(`Cleared local cache for ${filename}.`);
+                    }
+
+                    removeFromLocalRegistry(filename);
+                    delete transcriptCache[filename];
+                    await deleteCachedMedia(filename).catch(() => {});
+                    await loadAudioLibrary();
+                } catch (err) {
+                    writeLog(`Delete failed for ${filename}: ${err.message}`);
+                    alert(`Could not delete "${filename}":\n${err.message}`);
+                    btn.disabled = false;
+                    btn.innerHTML = '<i class="fa-solid fa-trash"></i>';
+                }
+            });
         });
 
         // Setup event listeners for each file-item
@@ -928,7 +1005,7 @@ async function fetchAndRenderTranscript(filename) {
         }
         
         transcriptCache[filename] = data.transcript;
-        localStorage.setItem('transcript_' + filename, JSON.stringify(data.transcript));
+        cacheLocally('transcript_' + filename, JSON.stringify(data.transcript), writeLog);
         addToLocalRegistry(filename, "Unknown Size");
         renderTranscriptHtml(filename, data.transcript);
         
@@ -1167,8 +1244,8 @@ async function runDirectModalUpload() {
         stepTranscribeDesc.textContent = 'Saving transcript...';
         writeLog("Saving transcript metadata to Vercel session...");
         
-        // Cache transcript locally
-        localStorage.setItem('transcript_' + selectedVideo.name, JSON.stringify(transcribeResult));
+        // Cache transcript locally — best-effort, never fatal to the pipeline
+        cacheLocally('transcript_' + selectedVideo.name, JSON.stringify(transcribeResult), writeLog);
         // Add to local registry
         addToLocalRegistry(selectedVideo.name, selectedVideo.size);
         

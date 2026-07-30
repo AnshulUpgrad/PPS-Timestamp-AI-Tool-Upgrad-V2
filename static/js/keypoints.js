@@ -1464,8 +1464,8 @@ async function runAllKeypointsGeneration() {
 
             // Checkpoint after every chunk so refreshes and later API failures do
             // not throw away all earlier work.
-            localStorage.setItem('chunks_' + activeFile, JSON.stringify({ sessions: sessions }));
-            localStorage.setItem('deleted_' + activeFile, JSON.stringify({ deleted_sentences: deletedSentences, deleted_words: deletedWords }));
+            safeSetItem('chunks_' + activeFile, JSON.stringify({ sessions: sessions }));
+            safeSetItem('deleted_' + activeFile, JSON.stringify({ deleted_sentences: deletedSentences, deleted_words: deletedWords }));
         } catch (err) {
             console.error(`Pointer generation failed for chunk ${sessionIndex + 1}:`, err);
             failedSessions.push({ number: sessionIndex + 1, message: err.message });
@@ -1717,8 +1717,8 @@ async function saveKeypointsToServer() {
     btnSaveKeypoints.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Saving...';
     
     // Save to localStorage as a primary backup (crucial for stateless environments like Vercel)
-    localStorage.setItem('chunks_' + activeFile, JSON.stringify({ sessions: sessions }));
-    localStorage.setItem('deleted_' + activeFile, JSON.stringify({ deleted_sentences: deletedSentences, deleted_words: deletedWords }));
+    safeSetItem('chunks_' + activeFile, JSON.stringify({ sessions: sessions }));
+    safeSetItem('deleted_' + activeFile, JSON.stringify({ deleted_sentences: deletedSentences, deleted_words: deletedWords }));
     
     const payload = { 
         sessions: sessions,

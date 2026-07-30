@@ -26,4 +26,4 @@ COPY . /app/
 EXPOSE 10000
 
 # Run the application using gunicorn dynamically binding to the PORT env variable with threads and a longer timeout
-CMD ["sh", "-c", "gunicorn --bind 0.0.0.0:$PORT --workers 1 --threads 4 --timeout 300 app:app"]
+CMD ["sh", "-c", "gunicorn --bind 0.0.0.0:$PORT --workers 1 --threads 2 --timeout 900 app:app"]
